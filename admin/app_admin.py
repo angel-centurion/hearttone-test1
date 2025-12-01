@@ -10,14 +10,14 @@ app = Flask(__name__,
            template_folder='/app/templates',
            static_folder='/app/static')
 
-app.config['SECRET_KEY'] = 'clave-secreta-admin'  # o 'clave-secreta-user'
+app.config['SECRET_KEY'] = 'clave-secreta-admin'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////app/instance/project.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# ✅ CONFIGURACIÓN MEJORADA DE SESIÓN
+# Configuración de sesión
 app.config['SESSION_PERMANENT'] = True
-app.config['PERMANENT_SESSION_LIFETIME'] = 3600  # 1 hora
-app.config['SESSION_COOKIE_SECURE'] = False  # True en producción con HTTPS
+app.config['PERMANENT_SESSION_LIFETIME'] = 3600
+app.config['SESSION_COOKIE_SECURE'] = False
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
@@ -31,7 +31,7 @@ login_manager.login_view = 'admin_login'
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-# ✅ IMPORTAR Y REGISTRAR EL BLUEPRINT
+# ✅ REGISTRAR SOLO EL BLUEPRINT DE ADMIN
 try:
     from admin_routes import admin_bp
     app.register_blueprint(admin_bp, url_prefix='/admin')
@@ -39,14 +39,13 @@ try:
 except ImportError as e:
     print(f"❌ Error importando admin_routes: {e}")
 
+# ✅ RUTAS DE AUTH PARA ADMIN APP
 @app.route('/login', methods=['GET', 'POST'])
 def admin_login():
     from shared.forms import LoginForm
     from flask_login import login_user
     from flask import request
-    from shared.models import User
     
-    # ✅ Si ya está autenticado, redirigir inmediatamente
     if current_user.is_authenticated and current_user.role == 'admin':
         return redirect(url_for('admin.admin_dashboard'))
     
@@ -56,13 +55,7 @@ def admin_login():
         user = User.query.filter_by(username=form.username.data).first()
         
         if user and user.check_password(form.password.data) and user.is_active and user.role == 'admin':
-            # ✅ FORZAR LA SESIÓN para evitar problemas de login
             login_user(user, remember=True, force=True)
-            
-            # ✅ Confirmar la sesión inmediatamente
-            from flask import session
-            session.permanent = True
-            
             flash('¡Inicio de sesión exitoso como Administrador!', 'success')
             return redirect(url_for('admin.admin_dashboard'))
         else:
@@ -79,7 +72,7 @@ def admin_logout():
 @app.route('/')
 def index():
     if current_user.is_authenticated and current_user.role == 'admin':
-        return redirect(url_for('admin.admin_dashboard'))  # ✅ CORREGIDO
+        return redirect(url_for('admin.admin_dashboard'))
     return redirect(url_for('admin_login'))
 
 def initialize_database():
@@ -106,63 +99,17 @@ def initialize_database():
                 db.session.add(admin)
                 print("✅ Admin principal creado: usuario='admin', contraseña='admin123'")
             
-            # ✅ CORREGIDO: PRIMERO ELIMINAR DISPOSITIVOS ANTIGUOS
-            old_devices = Device.query.filter(Device.device_code.like('DEVICE_%')).all()
-            if old_devices:
-                print(f"🗑️  Eliminando {len(old_devices)} dispositivos antiguos...")
-                for device in old_devices:
-                    print(f"  - Eliminado: {device.device_code}")
-                    db.session.delete(device)
-                db.session.commit()
+            # Crear dispositivos si no existen
+            from shared.auth import SECURE_DEVICE_CODES
+            existing_codes = [d.device_code for d in Device.query.all()]
             
-            # ✅ LISTA DE CÓDIGOS SEGUROS
-            SECURE_DEVICE_CODES = [
-                "HR-SENSOR-A1B2-C3D4", "HR-SENSOR-E5F6-G7H8", "HR-SENSOR-I9J0-K1L2",
-                "HR-SENSOR-M3N4-O5P6", "HR-SENSOR-Q7R8-S9T0", "HR-SENSOR-U1V2-W3X4",
-                "HR-SENSOR-Y5Z6-A7B8", "HR-SENSOR-C9D0-E1F2", "HR-SENSOR-G3H4-I5J6",
-                "HR-SENSOR-K7L8-M9N0", "HR-SENSOR-O1P2-Q3R4", "HR-SENSOR-S5T6-U7V8",
-                "HR-SENSOR-W9X0-Y1Z2", "HR-SENSOR-A3B4-C5D6", "HR-SENSOR-E7F8-G9H0",
-                "HR-SENSOR-I1J2-K3L4", "HR-SENSOR-M5N6-O7P8", "HR-SENSOR-Q9R0-S1T2",
-                "HR-SENSOR-U3V4-W5X6", "HR-SENSOR-Y7Z8-A9B0"
-            ]
+            for code in SECURE_DEVICE_CODES:
+                if code not in existing_codes:
+                    device = Device(device_code=code)
+                    db.session.add(device)
+                    print(f"  + Dispositivo creado: {code}")
             
-            # ✅ CONTAR SOLO DISPOSITIVOS NUEVOS
-            new_devices_count = Device.query.filter(Device.device_code.like('HR-SENSOR-%')).count()
-            print(f"DEBUG: Dispositivos nuevos existentes: {new_devices_count}")
-            
-            # Si ya hay 20 dispositivos NUEVOS, no hacer nada
-            if new_devices_count >= 20:
-                print("✅ Ya existen 20 dispositivos nuevos, no se crean más")
-            else:
-                # Crear solo los dispositivos nuevos que faltan
-                existing_codes = [d.device_code for d in Device.query.all()]
-                new_devices_created = 0
-                
-                for code in SECURE_DEVICE_CODES:
-                    if code not in existing_codes:
-                        device = Device(device_code=code)
-                        db.session.add(device)
-                        new_devices_created += 1
-                        print(f"  + Creado: {code}")
-                
-                db.session.commit()
-                print(f"✅ {new_devices_created} dispositivos nuevos creados")
-            
-            # ✅ VERIFICACIÓN FINAL
-            total_devices = Device.query.count()
-            new_devices_final = Device.query.filter(Device.device_code.like('HR-SENSOR-%')).count()
-            old_devices_final = Device.query.filter(Device.device_code.like('DEVICE_%')).count()
-            
-            print(f"📊 ESTADO FINAL:")
-            print(f"  - Dispositivos totales: {total_devices}")
-            print(f"  - Dispositivos nuevos: {new_devices_final}")
-            print(f"  - Dispositivos antiguos: {old_devices_final}")
-            
-            if total_devices == 20 and old_devices_final == 0:
-                print("✅ ✅ ¡SISTEMA LIMPIO! Exactamente 20 dispositivos nuevos")
-            else:
-                print(f"⚠️  ADVERTENCIA: Configuración inesperada")
-            
+            db.session.commit()
             print("✅ Base de datos inicializada correctamente")
             
         except Exception as e:

@@ -13,7 +13,8 @@
                     Para registrarte necesitas el <strong>código único</strong> que viene en tu pulsera de monitoreo.
                 </div>
                 
-                <form method="POST">
+                <!-- ✅ CORREGIR EL ACTION DEL FORM -->
+                <form method="POST" action="{{ url_for('user_register') }}">
                     {{ form.hidden_tag() }}
                     
                     <div class="mb-3">
@@ -66,6 +67,7 @@
                 
                 <div class="text-center mt-3">
                     <p>¿Ya tienes cuenta? 
+                        <!-- ✅ ESTE ENLACE ESTÁ BIEN -->
                         <a href="{{ url_for('user_login') }}">Inicia sesión aquí</a>
                     </p>
                 </div>
