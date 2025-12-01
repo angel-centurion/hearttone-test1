@@ -25,13 +25,13 @@ db.init_app(app)
 
 login_manager = LoginManager()
 login_manager.init_app(app)
-login_manager.login_view = 'admin_login'
+login_manager.login_view = 'admin.admin_login'  # ✅ CAMBIAR a blueprint
 
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-# ✅ REGISTRAR SOLO EL BLUEPRINT DE ADMIN
+# ✅ REGISTRAR BLUEPRINT DE ADMIN
 try:
     from admin_routes import admin_bp
     app.register_blueprint(admin_bp, url_prefix='/admin')
@@ -39,50 +39,24 @@ try:
 except ImportError as e:
     print(f"❌ Error importando admin_routes: {e}")
 
-# ✅ RUTAS DE AUTH PARA ADMIN APP
-@app.route('/login', methods=['GET', 'POST'])
-def admin_login():
-    from shared.forms import LoginForm
-    from flask_login import login_user
-    from flask import request
-    
-    if current_user.is_authenticated and current_user.role == 'admin':
-        return redirect(url_for('admin.admin_dashboard'))
-    
-    form = LoginForm()
-    
-    if form.validate_on_submit():
-        user = User.query.filter_by(username=form.username.data).first()
-        
-        if user and user.check_password(form.password.data) and user.is_active and user.role == 'admin':
-            login_user(user, remember=True, force=True)
-            flash('¡Inicio de sesión exitoso como Administrador!', 'success')
-            return redirect(url_for('admin.admin_dashboard'))
-        else:
-            flash('Credenciales incorrectas o no tiene permisos de administrador', 'danger')
-    
-    return render_template('admin/login.html', form=form)
+# ❌ ELIMINAR ESTAS RUTAS DUPLICADAS - YA EXISTEN EN EL BLUEPRINT
+# @app.route('/login', methods=['GET', 'POST'])
+# @app.route('/logout')  
+# @app.route('/')
 
-@app.route('/logout')
-def admin_logout():
-    logout_user()
-    flash('Has cerrado sesión de administrador', 'info')
-    return redirect(url_for('admin_login'))
-
+# ✅ SOLO DEJAR UNA RUTA DE REDIRECCIÓN PARA LA RAÍZ
 @app.route('/')
 def index():
-    if current_user.is_authenticated and current_user.role == 'admin':
-        return redirect(url_for('admin.admin_dashboard'))
-    return redirect(url_for('admin_login'))
+    return redirect(url_for('admin.admin_login'))  # ✅ Usar blueprint
 
 def initialize_database():
     with app.app_context():
         try:
             print("🗑️  Eliminando tablas existentes...")
-            db.drop_all()  # Forzar eliminación
+            db.drop_all()
             
             print("🔄 Creando nuevas tablas...")
-            db.create_all()  # Crear desde cero
+            db.create_all()
             
             # Verificar columnas creadas
             from sqlalchemy import inspect

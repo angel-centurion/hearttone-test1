@@ -1,16 +1,46 @@
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for
-from flask_login import login_required, current_user
+from flask_login import login_required, current_user, login_user, logout_user
 from shared.models import db, User, Device, SensorData
-from shared.forms import CreateAdminForm
+from shared.forms import CreateAdminForm, LoginForm
 from datetime import datetime, timedelta
 
 admin_bp = Blueprint('admin', __name__)
 
+# ✅ AÑADIR RUTAS DE LOGIN/LOGOUT AL BLUEPRINT
+@admin_bp.route('/login', methods=['GET', 'POST'])
+def admin_login():
+    if current_user.is_authenticated and current_user.role == 'admin':
+        return redirect(url_for('admin.admin_dashboard'))
+    
+    form = LoginForm()
+    
+    if form.validate_on_submit():
+        user = User.query.filter_by(username=form.username.data).first()
+        
+        if user and user.check_password(form.password.data) and user.is_active and user.role == 'admin':
+            login_user(user, remember=True, force=True)
+            flash('¡Inicio de sesión exitoso como Administrador!', 'success')
+            return redirect(url_for('admin.admin_dashboard'))
+        else:
+            flash('Credenciales incorrectas o no tiene permisos de administrador', 'danger')
+    
+    return render_template('admin/login.html', form=form)
+
+@admin_bp.route('/logout')
+def admin_logout():
+    logout_user()
+    flash('Has cerrado sesión de administrador', 'info')
+    return redirect(url_for('admin.admin_login'))
+
 @admin_bp.before_request
 def restrict_to_admin():
+    # Excluir las rutas de login y logout de la restricción
+    if request.endpoint in ['admin.admin_login', 'admin.admin_logout']:
+        return
+    
     if not current_user.is_authenticated or current_user.role != 'admin':
         flash('Acceso denegado. Se requiere rol de administrador.', 'danger')
-        return redirect(url_for('admin_login'))
+        return redirect(url_for('admin.admin_login'))
 
 @admin_bp.route('/dashboard')
 @login_required
