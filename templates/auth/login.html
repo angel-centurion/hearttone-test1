@@ -34,8 +34,15 @@
                 
                 <div class="text-center mt-3">
                     <p>¿No tienes cuenta? 
-                        <!-- ✅ Ya está correcto con auth.register -->
-                        <a href="{{ url_for('user_register') }}">Regístrate aquí</a>
+                        <!-- ✅ CORREGIDO: Ahora usa el blueprint user -->
+                        <a href="{{ url_for('user.user_register') }}">Regístrate aquí</a>
+                    </p>
+                </div>
+                
+                <div class="text-center mt-3">
+                    <hr>
+                    <p class="text-muted">
+                        <small>¿Eres administrador? <a href="http://localhost:5000/admin/login">Accede aquí</a></small>
                     </p>
                 </div>
             </div>

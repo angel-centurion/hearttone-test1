@@ -2,8 +2,8 @@ import os
 import sys
 sys.path.append('/app')
 
-from flask import Flask, redirect, url_for, render_template, flash
-from flask_login import LoginManager, current_user, logout_user
+from flask import Flask, redirect, url_for
+from flask_login import LoginManager, current_user
 from shared.models import db, User, Device
 
 app = Flask(__name__, 
@@ -25,29 +25,26 @@ db.init_app(app)
 
 login_manager = LoginManager()
 login_manager.init_app(app)
-login_manager.login_view = 'admin.admin_login'  # ✅ CAMBIAR a blueprint
+login_manager.login_view = 'admin.admin_login'  # ✅ Apunta al blueprint
 
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-# ✅ REGISTRAR BLUEPRINT DE ADMIN
+# ✅ REGISTRAR BLUEPRINT CON PREFIJO /admin
 try:
     from admin_routes import admin_bp
     app.register_blueprint(admin_bp, url_prefix='/admin')
-    print("✅ Blueprint de admin registrado correctamente")
+    print("✅ Blueprint de admin registrado correctamente en /admin")
 except ImportError as e:
     print(f"❌ Error importando admin_routes: {e}")
 
-# ❌ ELIMINAR ESTAS RUTAS DUPLICADAS - YA EXISTEN EN EL BLUEPRINT
-# @app.route('/login', methods=['GET', 'POST'])
-# @app.route('/logout')  
-# @app.route('/')
-
-# ✅ SOLO DEJAR UNA RUTA DE REDIRECCIÓN PARA LA RAÍZ
+# ✅ RUTA RAÍZ - REDIRIGE A LOGIN DE ADMIN
 @app.route('/')
 def index():
-    return redirect(url_for('admin.admin_login'))  # ✅ Usar blueprint
+    if current_user.is_authenticated and current_user.role == 'admin':
+        return redirect(url_for('admin.admin_dashboard'))
+    return redirect(url_for('admin.admin_login'))
 
 def initialize_database():
     with app.app_context():
@@ -55,7 +52,7 @@ def initialize_database():
             print("🗑️  Eliminando tablas existentes...")
             db.drop_all()
             
-            print("🔄 Creando nuevas tablas...")
+            print("📄 Creando nuevas tablas...")
             db.create_all()
             
             # Verificar columnas creadas

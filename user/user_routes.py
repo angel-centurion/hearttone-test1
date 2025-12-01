@@ -1,14 +1,15 @@
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for
 from flask_login import login_required, current_user, logout_user, login_user
 from shared.models import db, User, Device, SensorData
-from shared.forms import MedicalDataForm, ProfileForm, LoginForm
+from shared.forms import MedicalDataForm, ProfileForm, LoginForm, RegistrationForm
 from shared.chatbot_config import chatbot_manager
 from datetime import datetime, timedelta
 import random
 
 user_bp = Blueprint('user', __name__)
 
-# ✅ AÑADIR RUTAS DE LOGIN/LOGOUT AL BLUEPRINT
+# ==================== AUTENTICACIÓN ====================
+
 @user_bp.route('/login', methods=['GET', 'POST'])
 def user_login():
     if current_user.is_authenticated and current_user.role == 'user':
@@ -27,6 +28,66 @@ def user_login():
     
     return render_template('auth/login.html', form=form)
 
+@user_bp.route('/register', methods=['GET', 'POST'])
+def user_register():
+    if current_user.is_authenticated and current_user.role == 'user':
+        return redirect(url_for('user.dashboard'))
+    
+    form = RegistrationForm()
+    
+    if form.validate_on_submit():
+        if form.password.data != form.confirm_password.data:
+            flash('Las contraseñas no coinciden', 'danger')
+            return render_template('auth/register.html', form=form)
+        
+        if User.query.filter_by(username=form.username.data).first():
+            flash('El nombre de usuario ya existe', 'danger')
+            return render_template('auth/register.html', form=form)
+        
+        if User.query.filter_by(email=form.email.data).first():
+            flash('El email ya está registrado', 'danger')
+            return render_template('auth/register.html', form=form)
+        
+        # Validar código de dispositivo
+        device_code = form.device_code.data.strip().upper()
+        
+        from shared.auth import is_valid_device_code
+        
+        if not is_valid_device_code(device_code):
+            flash('Código de dispositivo inválido. Use el código exacto de su pulsera.', 'danger')
+            return render_template('auth/register.html', form=form)
+        
+        # Verificar si el dispositivo ya está en uso
+        device = Device.query.filter_by(device_code=device_code).first()
+        if device and device.is_used:
+            flash('Este dispositivo ya está en uso por otro usuario', 'danger')
+            return render_template('auth/register.html', form=form)
+        
+        # Si el dispositivo no existe en BD, crearlo
+        if not device:
+            device = Device(device_code=device_code)
+        
+        # Crear usuario
+        user = User(
+            username=form.username.data,
+            email=form.email.data,
+            device_code=device_code,
+            role='user'
+        )
+        user.set_password(form.password.data)
+        
+        device.is_used = True
+        
+        db.session.add(user)
+        if not Device.query.filter_by(device_code=device_code).first():
+            db.session.add(device)
+        db.session.commit()
+        
+        flash('¡Cuenta creada exitosamente! Por favor inicia sesión.', 'success')
+        return redirect(url_for('user.user_login'))
+    
+    return render_template('auth/register.html', form=form)
+
 @user_bp.route('/logout')
 def user_logout():
     logout_user()
@@ -35,13 +96,15 @@ def user_logout():
 
 @user_bp.before_request
 def restrict_to_user():
-    # Excluir las rutas de login y logout de la restricción
-    if request.endpoint in ['user.user_login', 'user.user_logout']:
+    # Excluir las rutas de login, logout y register de la restricción
+    if request.endpoint in ['user.user_login', 'user.user_logout', 'user.user_register']:
         return
     
     if not current_user.is_authenticated or current_user.role != 'user' or not current_user.is_active or current_user.is_deleted:
         flash('Acceso denegado o cuenta desactivada', 'danger')
         return redirect(url_for('user.user_login'))
+
+# ==================== DASHBOARD Y PERFIL ====================
 
 @user_bp.route('/dashboard')
 @login_required
@@ -99,6 +162,8 @@ def profile():
     
     return render_template('user/profile.html', form=form)
 
+# ==================== DATOS MÉDICOS ====================
+
 @user_bp.route('/medical-data', methods=['GET', 'POST'])
 @login_required
 def medical_data():
@@ -128,6 +193,8 @@ def medical_data():
     
     return render_template('user/medical_data.html', form=form)
 
+# ==================== MONITOREO ====================
+
 @user_bp.route('/monitoring')
 @login_required
 def monitoring():
@@ -137,79 +204,7 @@ def monitoring():
     
     return render_template('user/monitoring.html')
 
-@user_bp.route('/api/sensor-data')
-@login_required
-def api_sensor_data():
-    # Simulación de datos del sensor (reemplazar con datos reales del ESP32)
-    base_bpm = 70
-    if current_user.heart_condition == 'taquicardia':
-        base_bpm = 85 + random.randint(-10, 15)
-    elif current_user.heart_condition == 'bradicardia':
-        base_bpm = 55 + random.randint(-5, 10)
-    else:
-        base_bpm = 70 + random.randint(-10, 10)
-    
-    bpm = max(40, min(180, base_bpm))  # Mantener en rango razonable
-    
-    max_safe = current_user.max_safe_bpm or 120
-    min_safe = current_user.min_safe_bpm or 60
-    is_alert = bpm > max_safe or bpm < min_safe
-    
-    sensor_data = SensorData(
-        user_id=current_user.id,
-        bpm=bpm,
-        is_alert=is_alert
-    )
-    db.session.add(sensor_data)
-    db.session.commit()
-    
-    time_ago = datetime.utcnow() - timedelta(minutes=10)
-    historical_data = SensorData.query.filter(
-        SensorData.user_id == current_user.id,
-        SensorData.timestamp >= time_ago
-    ).order_by(SensorData.timestamp.asc()).all()
-    
-    chart_data = {
-        'labels': [data.timestamp.strftime('%H:%M:%S') for data in historical_data],
-        'bpm': [data.bpm for data in historical_data],
-        'alerts': [data.bpm if data.is_alert else None for data in historical_data]
-    }
-    
-    return jsonify({
-        'current_bpm': bpm,
-        'is_alert': is_alert,
-        'max_safe': max_safe,
-        'min_safe': min_safe,
-        'chart_data': chart_data,
-        'message': check_alert_condition(bpm, current_user) if is_alert else None
-    })
-
-def check_alert_condition(bpm, user):
-    max_safe = user.max_safe_bpm or 120
-    min_safe = user.min_safe_bpm or 60
-    
-    if bpm > max_safe:
-        return f'ALERTA: Taquicardia ({bpm} > {max_safe} BPM)'
-    else:
-        return f'ALERTA: Bradicardia ({bpm} < {min_safe} BPM)'
-
-@user_bp.route('/deactivate-account', methods=['GET', 'POST'])
-@login_required
-def deactivate_account():
-    if request.method == 'POST':
-        confirm_username = request.form.get('confirm_username')
-        if confirm_username != current_user.username:
-            flash('El nombre de usuario no coincide', 'danger')
-            return render_template('user/deactivate_account.html')
-        
-        current_user.deactivate_account()
-        db.session.commit()
-        
-        logout_user()
-        flash('Tu cuenta ha sido desactivada. Puedes contactar al administrador para reactivarla.', 'info')
-        return redirect(url_for('user.user_login'))
-    
-    return render_template('user/deactivate_account.html')
+# ==================== REPORTES ====================
 
 @user_bp.route('/health-report')
 @login_required
@@ -269,6 +264,28 @@ def health_report():
                          current_days=days,
                          start_date=start_date)
 
+# ==================== GESTIÓN DE CUENTA ====================
+
+@user_bp.route('/deactivate-account', methods=['GET', 'POST'])
+@login_required
+def deactivate_account():
+    if request.method == 'POST':
+        confirm_username = request.form.get('confirm_username')
+        if confirm_username != current_user.username:
+            flash('El nombre de usuario no coincide', 'danger')
+            return render_template('user/deactivate_account.html')
+        
+        current_user.deactivate_account()
+        db.session.commit()
+        
+        logout_user()
+        flash('Tu cuenta ha sido desactivada. Puedes contactar al administrador para reactivarla.', 'info')
+        return redirect(url_for('user.user_login'))
+    
+    return render_template('user/deactivate_account.html')
+
+# ==================== GESTIÓN DE LECTURAS ====================
+
 @user_bp.route('/delete-readings', methods=['POST'])
 @login_required
 def delete_readings():
@@ -300,6 +317,8 @@ def cleanup_readings():
         flash('No hay lecturas para limpiar', 'info')
     
     return redirect(url_for('user.dashboard'))
+
+# ==================== APIs ====================
 
 @user_bp.route('/api/real-time-data')
 @login_required
@@ -364,8 +383,6 @@ def api_real_time_data():
         print(f"❌ Error en api_real_time_data: {str(e)}")
         return jsonify({'error': 'Error obteniendo datos en tiempo real'}), 500
 
-# ================== CHATBOT ENDPOINTS ==================
-
 @user_bp.route('/api/chatbot-analysis', methods=['POST'])
 @login_required
 def api_chatbot_analysis():
@@ -420,7 +437,7 @@ def api_weekly_report():
     
     return jsonify(daily_data)
 
-# ================== HELPER FUNCTIONS ==================
+# ==================== FUNCIONES AUXILIARES ====================
 
 def get_user_health_context():
     week_ago = datetime.utcnow() - timedelta(days=7)

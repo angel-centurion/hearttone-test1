@@ -1,11 +1,10 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request
-from flask_login import current_user
-from shared.models import db, User, Device
-from shared.forms import RegistrationForm
+# shared/auth.py
+"""
+Módulo de autenticación y validación de dispositivos.
+Contiene los códigos válidos de dispositivos y funciones de validación.
+"""
 
-auth_bp = Blueprint('auth', __name__)
-
-# ✅ LISTA DE CÓDIGOS DIRECTAMENTE EN EL ARCHIVO
+# ✅ LISTA DE CÓDIGOS SEGUROS DE DISPOSITIVOS (20 dispositivos)
 SECURE_DEVICE_CODES = [
     "HR-SENSOR-A1B2-C3D4",
     "HR-SENSOR-E5F6-G7H8", 
@@ -30,71 +29,37 @@ SECURE_DEVICE_CODES = [
 ]
 
 def is_valid_device_code(code):
-    """Verifica si un código de dispositivo es válido"""
+    """
+    Verifica si un código de dispositivo es válido.
+    
+    Args:
+        code (str): Código del dispositivo a validar (debe estar en mayúsculas)
+        
+    Returns:
+        bool: True si el código existe en la lista de códigos válidos
+        
+    Example:
+        >>> is_valid_device_code("HR-SENSOR-A1B2-C3D4")
+        True
+        >>> is_valid_device_code("INVALID-CODE")
+        False
+    """
     return code in SECURE_DEVICE_CODES
 
-@auth_bp.route('/register', methods=['GET', 'POST'])
-def register():
-    if current_user.is_authenticated:
-        if current_user.role == 'user':
-            return redirect(url_for('user.dashboard'))
-        else:
-            return redirect(url_for('admin.admin_dashboard'))
+def get_available_devices_count():
+    """
+    Retorna el número total de dispositivos disponibles en el sistema.
     
-    form = RegistrationForm()
+    Returns:
+        int: Cantidad total de códigos de dispositivos configurados
+    """
+    return len(SECURE_DEVICE_CODES)
+
+def get_all_device_codes():
+    """
+    Retorna una copia de la lista de todos los códigos de dispositivos.
     
-    if form.validate_on_submit():
-        if form.password.data != form.confirm_password.data:
-            flash('Las contraseñas no coinciden', 'danger')
-            return render_template('auth/register.html', form=form)
-        
-        if User.query.filter_by(username=form.username.data).first():
-            flash('El nombre de usuario ya existe', 'danger')
-            return render_template('auth/register.html', form=form)
-        
-        if User.query.filter_by(email=form.email.data).first():
-            flash('El email ya está registrado', 'danger')
-            return render_template('auth/register.html', form=form)
-        
-        # ✅ VALIDACIÓN DIRECTA SIN IMPORTS EXTERNOS
-        device_code = form.device_code.data.strip().upper()
-        
-        if not is_valid_device_code(device_code):
-            flash('Código de dispositivo inválido. Use el código exacto de su pulsera.', 'danger')
-            return render_template('auth/register.html', form=form)
-        
-        # Verificar si el dispositivo ya está en uso
-        device = Device.query.filter_by(device_code=device_code).first()
-        if device and device.is_used:
-            flash('Este dispositivo ya está en uso por otro usuario', 'danger')
-            return render_template('auth/register.html', form=form)
-        
-        # Si el dispositivo no existe en BD, crearlo
-        if not device:
-            device = Device(device_code=device_code)
-        
-        # ✅ CORREGIDO: Si un admin está creando el usuario, asignar created_by
-        created_by_id = None
-        if current_user.is_authenticated and current_user.role == 'admin':
-            created_by_id = current_user.id
-        
-        user = User(
-            username=form.username.data,
-            email=form.email.data,
-            device_code=device_code,
-            role='user',
-            created_by=created_by_id  # ✅ Ahora se asigna correctamente
-        )
-        user.set_password(form.password.data)
-        
-        device.is_used = True
-        
-        db.session.add(user)
-        if not Device.query.filter_by(device_code=device_code).first():
-            db.session.add(device)
-        db.session.commit()
-        
-        flash('¡Cuenta creada exitosamente! Por favor inicia sesión.', 'success')
-        return redirect(url_for('user_login'))
-    
-    return render_template('auth/register.html', form=form)
+    Returns:
+        list: Lista con todos los códigos de dispositivos válidos
+    """
+    return SECURE_DEVICE_CODES.copy()

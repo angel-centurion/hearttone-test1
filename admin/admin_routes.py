@@ -6,7 +6,8 @@ from datetime import datetime, timedelta
 
 admin_bp = Blueprint('admin', __name__)
 
-# ✅ AÑADIR RUTAS DE LOGIN/LOGOUT AL BLUEPRINT
+# ==================== AUTENTICACIÓN ====================
+
 @admin_bp.route('/login', methods=['GET', 'POST'])
 def admin_login():
     if current_user.is_authenticated and current_user.role == 'admin':
@@ -38,9 +39,15 @@ def restrict_to_admin():
     if request.endpoint in ['admin.admin_login', 'admin.admin_logout']:
         return
     
+    # ✅ IMPORTANTE: También excluir la API de sensor data (para ESP32)
+    if request.endpoint == 'admin.receive_sensor_data':
+        return
+    
     if not current_user.is_authenticated or current_user.role != 'admin':
         flash('Acceso denegado. Se requiere rol de administrador.', 'danger')
         return redirect(url_for('admin.admin_login'))
+
+# ==================== DASHBOARD ====================
 
 @admin_bp.route('/dashboard')
 @login_required
@@ -69,6 +76,8 @@ def admin_dashboard():
     }
     
     return render_template('admin/dashboard.html', stats=stats, recent_users=recent_users)
+
+# ==================== GESTIÓN DE USUARIOS ====================
 
 @admin_bp.route('/users')
 @login_required
@@ -151,11 +160,15 @@ def admin_delete_permanent(user_id):
     flash('Usuario eliminado permanentemente del sistema', 'warning')
     return redirect(url_for('admin.admin_inactive_users'))
 
+# ==================== GESTIÓN DE DISPOSITIVOS ====================
+
 @admin_bp.route('/devices')
 @login_required
 def admin_devices():
     devices_list = Device.query.order_by(Device.created_at).all()
     return render_template('admin/devices.html', devices=devices_list)
+
+# ==================== GESTIÓN DE ADMINISTRADORES (ROOT ONLY) ====================
 
 @admin_bp.route('/create-admin', methods=['GET', 'POST'])
 @login_required
@@ -233,16 +246,7 @@ def admin_delete_admin(admin_id):
     flash('Administrador eliminado correctamente', 'success')
     return redirect(url_for('admin.admin_admins'))
 
-@admin_bp.route('/api/stats')
-@login_required
-def admin_api_stats():
-    stats = {
-        'total_users': User.query.filter_by(role='user', is_active=True, is_deleted=False).count(),
-        'used_devices': Device.query.filter_by(is_used=True).count(),
-        'available_devices': Device.query.filter_by(is_used=False).count(),
-        'active_alerts': SensorData.query.filter_by(is_alert=True).count()
-    }
-    return jsonify(stats)
+# ==================== REPORTES ====================
 
 @admin_bp.route('/user-reports')
 @login_required
@@ -343,8 +347,27 @@ def admin_user_detailed_report(user_id):
                          weekly_data=weekly_data,
                          month_ago=month_ago)
 
+# ==================== APIs ====================
+
+@admin_bp.route('/api/stats')
+@login_required
+def admin_api_stats():
+    stats = {
+        'total_users': User.query.filter_by(role='user', is_active=True, is_deleted=False).count(),
+        'used_devices': Device.query.filter_by(is_used=True).count(),
+        'available_devices': Device.query.filter_by(is_used=False).count(),
+        'active_alerts': SensorData.query.filter_by(is_alert=True).count()
+    }
+    return jsonify(stats)
+
+# ✅ ENDPOINT CRÍTICO PARA ESP32 - SIN @login_required
 @admin_bp.route('/api/sensor-data', methods=['POST'])
 def receive_sensor_data():
+    """
+    Endpoint para recibir datos del ESP32.
+    NO requiere autenticación porque el ESP32 no puede usar Flask-Login.
+    La seguridad se maneja validando el device_code.
+    """
     try:
         data = request.get_json()
         

@@ -15,13 +15,14 @@ services:
     restart: unless-stopped
     networks:
       - app-network
-    # ✅ HEALTHCHECK CORREGIDO - va aquí dentro del servicio admin
+    expose:
+      - "5000"  # ✅ Solo expone internamente, no al host
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/admin/login"]  # ✅ Ruta específica
+      test: ["CMD", "curl", "-f", "http://localhost:5000/admin/login"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s  # ✅ Tiempo extra para que Flask inicie
+      start_period: 40s
 
   user:
     build: .
@@ -37,9 +38,10 @@ services:
     restart: unless-stopped
     networks:
       - app-network
-    # ✅ HEALTHCHECK para el servicio user
+    expose:
+      - "5001"  # ✅ Puerto 5001 internamente
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/"]  # ✅ Ruta raíz para user
+      test: ["CMD", "curl", "-f", "http://localhost:5001/user/login"]  # ✅ CORREGIDO: Puerto 5001
       interval: 30s
       timeout: 10s
       retries: 3
@@ -48,21 +50,27 @@ services:
   nginx:
     image: nginx:alpine
     ports:
-      - "80:80"
+      - "80:80"  # Solo nginx expone puerto 80 al exterior
     volumes:
-      - ./nginx-aws.conf:/etc/nginx/nginx.conf
+      - ./nginx-aws.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       admin:
-        condition: service_healthy  # ✅ Espera a que admin esté healthy
+        condition: service_healthy
       user:
-        condition: service_healthy  # ✅ Espera a que user esté healthy
+        condition: service_healthy
     container_name: icc-nginx
     restart: unless-stopped
     networks:
       - app-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
 volumes:
   sqlite_data:
+    driver: local
 
 networks:
   app-network:
