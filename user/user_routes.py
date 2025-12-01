@@ -1,18 +1,47 @@
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for
-from flask_login import login_required, current_user, logout_user
+from flask_login import login_required, current_user, logout_user, login_user
 from shared.models import db, User, Device, SensorData
-from shared.forms import MedicalDataForm, ProfileForm
+from shared.forms import MedicalDataForm, ProfileForm, LoginForm
 from shared.chatbot_config import chatbot_manager
 from datetime import datetime, timedelta
 import random
 
 user_bp = Blueprint('user', __name__)
 
+# ✅ AÑADIR RUTAS DE LOGIN/LOGOUT AL BLUEPRINT
+@user_bp.route('/login', methods=['GET', 'POST'])
+def user_login():
+    if current_user.is_authenticated and current_user.role == 'user':
+        return redirect(url_for('user.dashboard'))
+    
+    form = LoginForm()
+    if form.validate_on_submit():
+        user = User.query.filter_by(username=form.username.data).first()
+        
+        if user and user.check_password(form.password.data) and user.is_active and user.role == 'user':
+            login_user(user)
+            flash('¡Inicio de sesión exitoso!', 'success')
+            return redirect(url_for('user.dashboard'))
+        else:
+            flash('Credenciales incorrectas o no es un usuario válido', 'danger')
+    
+    return render_template('auth/login.html', form=form)
+
+@user_bp.route('/logout')
+def user_logout():
+    logout_user()
+    flash('Has cerrado sesión', 'info')
+    return redirect(url_for('user.user_login'))
+
 @user_bp.before_request
 def restrict_to_user():
+    # Excluir las rutas de login y logout de la restricción
+    if request.endpoint in ['user.user_login', 'user.user_logout']:
+        return
+    
     if not current_user.is_authenticated or current_user.role != 'user' or not current_user.is_active or current_user.is_deleted:
         flash('Acceso denegado o cuenta desactivada', 'danger')
-        return redirect(url_for('user_login'))
+        return redirect(url_for('user.user_login'))
 
 @user_bp.route('/dashboard')
 @login_required
@@ -178,7 +207,7 @@ def deactivate_account():
         
         logout_user()
         flash('Tu cuenta ha sido desactivada. Puedes contactar al administrador para reactivarla.', 'info')
-        return redirect(url_for('user_login'))
+        return redirect(url_for('user.user_login'))
     
     return render_template('user/deactivate_account.html')
 

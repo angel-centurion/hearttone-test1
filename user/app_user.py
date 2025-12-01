@@ -5,7 +5,7 @@ sys.path.append('/app')
 from flask import Flask, redirect, url_for, render_template, flash, request
 from flask_login import LoginManager, current_user, logout_user, login_user
 from shared.models import db, User
-from shared.forms import LoginForm, RegistrationForm  # ✅ Añadir RegistrationForm
+from shared.forms import LoginForm, RegistrationForm
 
 app = Flask(__name__,
            template_folder='/app/templates',
@@ -26,7 +26,7 @@ db.init_app(app)
 
 login_manager = LoginManager()
 login_manager.init_app(app)
-login_manager.login_view = 'user_login'
+login_manager.login_view = 'user.user_login'  # ✅ Cambiar a blueprint
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -35,34 +35,16 @@ def load_user(user_id):
 # ✅ REGISTRAR BLUEPRINTS
 try:
     from user_routes import user_bp
-    app.register_blueprint(user_bp, url_prefix='/user')
+    app.register_blueprint(user_bp, url_prefix='/')
     print("✅ Blueprint de usuario registrado correctamente")
 except ImportError as e:
     print(f"❌ Error importando user_routes: {e}")
 
-# ✅ RUTAS DE AUTH PARA USER APP
-@app.route('/login', methods=['GET', 'POST'])
-def user_login():
-    if current_user.is_authenticated and current_user.role == 'user':
-        return redirect(url_for('user.dashboard'))
-    
-    form = LoginForm()
-    if form.validate_on_submit():
-        user = User.query.filter_by(username=form.username.data).first()
-        
-        if user and user.check_password(form.password.data) and user.is_active and user.role == 'user':
-            login_user(user)
-            flash('¡Inicio de sesión exitoso!', 'success')
-            return redirect(url_for('user.dashboard'))
-        else:
-            flash('Credenciales incorrectas o no es un usuario válido', 'danger')
-    
-    return render_template('auth/login.html', form=form)
-
+# ✅ SOLO RUTAS DE REGISTRO (que no están en el blueprint)
 @app.route('/register', methods=['GET', 'POST'])
 def user_register():
     if current_user.is_authenticated and current_user.role == 'user':
-        return redirect(url_for('user.dashboard'))
+        return redirect(url_for('user.dashboard'))  # ✅ Usar blueprint
     
     form = RegistrationForm()
     
@@ -117,21 +99,16 @@ def user_register():
         db.session.commit()
         
         flash('¡Cuenta creada exitosamente! Por favor inicia sesión.', 'success')
-        return redirect(url_for('user_login'))
+        return redirect(url_for('user.user_login'))  # ✅ Usar blueprint
     
     return render_template('auth/register.html', form=form)
 
-@app.route('/logout')
-def user_logout():
-    logout_user()
-    flash('Has cerrado sesión', 'info')
-    return redirect(url_for('user_login'))
-
+# ✅ REDIRECCIÓN DE RAÍZ
 @app.route('/')
 def index():
     if current_user.is_authenticated and current_user.role == 'user':
-        return redirect(url_for('user.dashboard'))
-    return redirect(url_for('user_login'))
+        return redirect(url_for('user.dashboard'))  # ✅ Usar blueprint
+    return redirect(url_for('user.user_login'))  # ✅ Usar blueprint
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
