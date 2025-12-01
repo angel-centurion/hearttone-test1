@@ -78,11 +78,17 @@ def index():
 def initialize_database():
     with app.app_context():
         try:
-            # ✅ FORZAR CREACIÓN DE TABLAS
-            db.drop_all()  # Eliminar tablas existentes
-            db.create_all()  # Crear tablas nuevas
+            print("🗑️  Eliminando tablas existentes...")
+            db.drop_all()  # Forzar eliminación
             
-            print("✅ Tablas recreadas correctamente")
+            print("🔄 Creando nuevas tablas...")
+            db.create_all()  # Crear desde cero
+            
+            # Verificar columnas creadas
+            from sqlalchemy import inspect
+            inspector = inspect(db.engine)
+            columns = [col['name'] for col in inspector.get_columns('users')]
+            print(f"✅ Columnas de users: {columns}")
             
             # Crear admin principal
             if not User.query.filter_by(username='admin').first():
@@ -98,18 +104,18 @@ def initialize_database():
             # Crear dispositivos
             from shared.auth import SECURE_DEVICE_CODES
             for code in SECURE_DEVICE_CODES:
-                device = Device(device_code=code)
-                db.session.add(device)
-                print(f"  + Dispositivo: {code}")
+                if not Device.query.filter_by(device_code=code).first():
+                    device = Device(device_code=code)
+                    db.session.add(device)
+                    print(f"  + Dispositivo: {code}")
             
             db.session.commit()
-            print("✅ Base de datos inicializada correctamente")
+            print("🎉 Base de datos inicializada CORRECTAMENTE")
             
         except Exception as e:
-            print(f"❌ Error inicializando base de datos: {e}")
+            print(f"❌ Error crítico: {e}")
             import traceback
             traceback.print_exc()
-
 
 if __name__ == '__main__':
     initialize_database()

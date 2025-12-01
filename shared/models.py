@@ -1,3 +1,4 @@
+# shared/models.py - VERIFICAR LINEA POR LINEA
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -14,6 +15,8 @@ class User(UserMixin, db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), default='user', nullable=False)
     device_code = db.Column(db.String(50), unique=True)
+    
+    # ✅ ESTAS 4 COLUMNAS DEBEN ESTAR EXACTAMENTE ASÍ:
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     is_deleted = db.Column(db.Boolean, default=False, nullable=False)
     deleted_at = db.Column(db.DateTime)
@@ -28,7 +31,7 @@ class User(UserMixin, db.Model):
     max_safe_bpm = db.Column(db.Integer, default=120)
     min_safe_bpm = db.Column(db.Integer, default=60)
     
-    # Relación para saber qué usuarios creó este admin
+    # Relación
     created_users = db.relationship('User', backref=db.backref('creator', remote_side=[id]))
     
     def set_password(self, password):
@@ -38,10 +41,8 @@ class User(UserMixin, db.Model):
         return check_password_hash(self.password_hash, password)
     
     def calculate_safe_limits(self):
-        """Calcular límites seguros basados en datos médicos"""
         if self.age and self.heart_condition:
             base_max = 220 - self.age
-            
             if self.heart_condition == 'arritmia':
                 self.max_safe_bpm = int(base_max * 0.7)
                 self.min_safe_bpm = 50
@@ -61,32 +62,25 @@ class User(UserMixin, db.Model):
     def can_deactivate_user(self, target_user):
         if self.role != 'admin':
             return False
-        
         if self.is_root_admin():
             return True
-        
         if target_user.role == 'user' and target_user.created_by == self.id:
             return True
-        
         return False
 
     def deactivate_account(self):
-        """Desactivar la cuenta en lugar de borrarla"""
         self.is_active = False
         self.is_deleted = True
         self.deleted_at = datetime.utcnow()
-        
         if self.device_code:
             device = Device.query.filter_by(device_code=self.device_code).first()
             if device:
                 device.is_used = False
 
     def reactivate_account(self):
-        """Reactivar una cuenta desactivada"""
         self.is_active = True
         self.is_deleted = False
         self.deleted_at = None
-        
         if self.device_code:
             device = Device.query.filter_by(device_code=self.device_code).first()
             if device:
