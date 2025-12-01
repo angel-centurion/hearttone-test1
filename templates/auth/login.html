@@ -34,7 +34,6 @@
                 
                 <div class="text-center mt-3">
                     <p>¿No tienes cuenta? 
-                        <!-- ✅ CORREGIDO: Ahora usa el blueprint user -->
                         <a href="{{ url_for('user.user_register') }}">Regístrate aquí</a>
                     </p>
                 </div>
@@ -42,7 +41,8 @@
                 <div class="text-center mt-3">
                     <hr>
                     <p class="text-muted">
-                        <small>¿Eres administrador? <a href="http://localhost:5000/admin/login">Accede aquí</a></small>
+                        <!-- ✅ CORREGIDO: URL relativa en vez de localhost hardcodeado -->
+                        <small>¿Eres administrador? <a href="/admin/login">Accede aquí</a></small>
                     </p>
                 </div>
             </div>
