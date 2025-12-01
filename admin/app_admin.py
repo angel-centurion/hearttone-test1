@@ -78,17 +78,13 @@ def index():
 def initialize_database():
     with app.app_context():
         try:
-            db.create_all()
+            # ✅ FORZAR CREACIÓN DE TABLAS
+            db.drop_all()  # Eliminar tablas existentes
+            db.create_all()  # Crear tablas nuevas
             
-            # Verificar si la tabla users tiene la columna created_by
-            from sqlalchemy import inspect
-            inspector = inspect(db.engine)
-            columns = [col['name'] for col in inspector.get_columns('users')]
+            print("✅ Tablas recreadas correctamente")
             
-            if 'created_by' not in columns:
-                print("⚠️  La base de datos necesita ser recreada. Elimina instance/project.db y reinicia.")
-                return
-            
+            # Crear admin principal
             if not User.query.filter_by(username='admin').first():
                 admin = User(
                     username='admin',
@@ -99,21 +95,21 @@ def initialize_database():
                 db.session.add(admin)
                 print("✅ Admin principal creado: usuario='admin', contraseña='admin123'")
             
-            # Crear dispositivos si no existen
+            # Crear dispositivos
             from shared.auth import SECURE_DEVICE_CODES
-            existing_codes = [d.device_code for d in Device.query.all()]
-            
             for code in SECURE_DEVICE_CODES:
-                if code not in existing_codes:
-                    device = Device(device_code=code)
-                    db.session.add(device)
-                    print(f"  + Dispositivo creado: {code}")
+                device = Device(device_code=code)
+                db.session.add(device)
+                print(f"  + Dispositivo: {code}")
             
             db.session.commit()
             print("✅ Base de datos inicializada correctamente")
             
         except Exception as e:
             print(f"❌ Error inicializando base de datos: {e}")
+            import traceback
+            traceback.print_exc()
+
 
 if __name__ == '__main__':
     initialize_database()
