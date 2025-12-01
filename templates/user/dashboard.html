@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <h2>Mi Panel de Monitoreo</h2>
+        <p class="text-muted">Bienvenido al sistema de monitoreo cardíaco</p>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{{ url_for('user.monitoring') }}" class="btn btn-primary">📊 Monitoreo en Tiempo Real</a>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-light">
+            <div class="card-body text-center">
+                <h3>{{ total_readings }}</h3>
+                <p class="card-text">Lecturas Totales</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-light">
+            <div class="card-body text-center">
+                <h3>{{ alert_count }}</h3>
+                <p class="card-text">Alertas Registradas</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-light">
+            <div class="card-body text-center">
+                <h3>{{ current_user.device_code }}</h3>
+                <p class="card-text">Mi Dispositivo</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-light">
+            <div class="card-body text-center">
+                <h3>
+                    {% if current_user.age and current_user.weight %}
+                    ✅
+                    {% else %}
+                    ⚠️
+                    {% endif %}
+                </h3>
+                <p class="card-text">Datos Médicos</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- CONTROLES DE FILTRADO Y LIMPIEZA -->
+<div class="row mb-3">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <label class="form-label"><strong>🔍 Filtrar Lecturas:</strong></label>
+                        <div class="btn-group w-100" role="group">
+                            <a href="{{ url_for('user.dashboard', filter='todas', limit=current_limit) }}" 
+                               class="btn btn-outline-primary {% if current_filter == 'todas' %}active{% endif %}">
+                                Todas
+                            </a>
+                            <a href="{{ url_for('user.dashboard', filter='alertas', limit=current_limit) }}" 
+                               class="btn btn-outline-danger {% if current_filter == 'alertas' %}active{% endif %}">
+                                Solo Alertas
+                            </a>
+                            <a href="{{ url_for('user.dashboard', filter='normales', limit=current_limit) }}" 
+                               class="btn btn-outline-success {% if current_filter == 'normales' %}active{% endif %}">
+                                Solo Normales
+                            </a>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label"><strong>📊 Mostrar:</strong></label>
+                        <div class="btn-group w-100" role="group">
+                            <a href="{{ url_for('user.dashboard', filter=current_filter, limit=10) }}" 
+                               class="btn btn-outline-secondary {% if current_limit == 10 %}active{% endif %}">
+                                10
+                            </a>
+                            <a href="{{ url_for('user.dashboard', filter=current_filter, limit=25) }}" 
+                               class="btn btn-outline-secondary {% if current_limit == 25 %}active{% endif %}">
+                                25
+                            </a>
+                            <a href="{{ url_for('user.dashboard', filter=current_filter, limit=50) }}" 
+                               class="btn btn-outline-secondary {% if current_limit == 50 %}active{% endif %}">
+                                50
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <label class="form-label"><strong>🧹 Gestión de Datos:</strong></label>
+                <div class="d-grid gap-2">
+                    <form method="POST" action="{{ url_for('user.cleanup_readings') }}" 
+                          onsubmit="return confirm('¿Mantener solo las 50 lecturas más recientes?');" class="d-grid">
+                        <button type="submit" class="btn btn-warning btn-sm">
+                            🗑️ Limpiar Lecturas Antiguas
+                        </button>
+                    </form>
+                    <form method="POST" action="{{ url_for('user.delete_readings') }}" 
+                          onsubmit="return confirm('¿ELIMINAR TODO el historial de lecturas? Esta acción no se puede deshacer.');" class="d-grid">
+                        <button type="submit" class="btn btn-danger btn-sm">
+                            ⚠️ Eliminar Todo el Historial
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Mis Datos</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-group">
+                    <li class="list-group-item d-flex justify-content-between">
+                        <span>Usuario:</span>
+                        <strong>{{ current_user.username }}</strong>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between">
+                        <span>Email:</span>
+                        <strong>{{ current_user.email }}</strong>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between">
+                        <span>Dispositivo:</span>
+                        <strong>{{ current_user.device_code }}</strong>
+                    </li>
+                    {% if current_user.age %}
+                    <li class="list-group-item d-flex justify-content-between">
+                        <span>Edad:</span>
+                        <strong>{{ current_user.age }} años</strong>
+                    </li>
+                    {% endif %}
+                    {% if current_user.heart_condition %}
+                    <li class="list-group-item d-flex justify-content-between">
+                        <span>Condición:</span>
+                        <strong class="text-warning">{{ current_user.heart_condition }}</strong>
+                    </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Acciones Rápidas</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('user.medical_data') }}" class="btn btn-outline-primary">
+                        🏥 {% if not current_user.age %}Completar{% else %}Actualizar{% endif %} Datos Médicos
+                    </a>
+                    <a href="{{ url_for('user.health_report') }}" class="btn btn-outline-info 
+                        {% if not current_user.age or not current_user.weight %}disabled{% endif %}">
+                        📊 Ver Mi Reporte de Salud
+                        {% if not current_user.age or not current_user.weight %}
+                        <small class="d-block text-muted">(Complete datos médicos primero)</small>
+                        {% endif %}
+                    </a>
+                    <a href="{{ url_for('user.monitoring') }}" class="btn btn-outline-warning">
+                        📈 Ver Monitoreo
+                    </a>
+                    <a href="{{ url_for('user.profile') }}" class="btn btn-outline-success">
+                        👤 Editar Perfil
+                    </a>
+                    <a href="{{ url_for('user.deactivate_account') }}" class="btn btn-outline-danger">
+                        ⏸️ Desactivar Mi Cuenta
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if recent_data %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    📋 Últimas Lecturas
+                    <small class="text-muted">
+                        ({{ current_filter|title }} - Mostrando {{ recent_data|length }} de {{ total_readings }})
+                    </small>
+                </h5>
+                <span class="badge bg-{% if current_filter == 'alertas' %}danger{% elif current_filter == 'normales' %}success{% else %}primary{% endif %}">
+                    Filtro: {{ current_filter|title }}
+                </span>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>BPM</th>
+                                <th>Estado</th>
+                                <th>Fecha/Hora</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for data in recent_data %}
+                            <tr>
+                                <td>
+                                    <strong>{{ data.bpm }}</strong>
+                                    <br>
+                                    <small class="text-muted">
+                                        Límites: {{ current_user.min_safe_bpm or 60 }}-{{ current_user.max_safe_bpm or 120 }}
+                                    </small>
+                                </td>
+                                <td>
+                                    {% if data.is_alert %}
+                                        <span class="badge bg-danger">🚨 Alerta</span>
+                                        <br>
+                                        <small class="text-muted">
+                                            {% if data.bpm > (current_user.max_safe_bpm or 120) %}
+                                            Taquicardia
+                                            {% else %}
+                                            Bradicardia
+                                            {% endif %}
+                                        </small>
+                                    {% else %}
+                                        <span class="badge bg-success">✅ Normal</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ data.timestamp.strftime('%d/%m/%Y %H:%M:%S') }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body text-center">
+                <p class="text-muted">No hay lecturas registradas con el filtro actual.</p>
+                <a href="{{ url_for('user.monitoring') }}" class="btn btn-primary">
+                    🎯 Iniciar Monitoreo
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card border-warning">
+            <div class="card-header bg-warning">
+                <h4 class="card-title mb-0 text-white">Desactivar Mi Cuenta</h4>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <h5>ℹ️ Información importante</h5>
+                    <p>Al desactivar tu cuenta:</p>
+                    <ul>
+                        <li><strong>✅ Se conservan</strong> tus datos históricos y reportes</li>
+                        <li><strong>✅ Podrás reactivarla</strong> contactando al administrador</li>
+                        <li><strong>🔒 Perderás acceso</strong> temporalmente al sistema</li>
+                        <li><strong>📱 Tu dispositivo</strong> <code>{{ current_user.device_code }}</code> quedará disponible para otros</li>
+                        <li><strong>📊 Tus datos</strong> médicos y lecturas se mantendrán</li>
+                    </ul>
+                </div>
+                
+                <div class="alert alert-warning">
+                    <strong>¿Seguro que quieres desactivar tu cuenta?</strong><br>
+                    Esta acción es reversible contactando al administrador.
+                </div>
+                
+                <form method="POST">
+                    <div class="mb-3">
+                        <label for="confirm_username" class="form-label">
+                            Para confirmar, escribe tu nombre de usuario:
+                        </label>
+                        <input type="text" class="form-control" id="confirm_username" 
+                               name="confirm_username" required
+                               placeholder="Escribe '{{ current_user.username }}'">
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-warning">
+                            ⏸️ Desactivar Mi Cuenta
+                        </button>
+                        <a href="{{ url_for('user.dashboard') }}" class="btn btn-secondary">
+                            ← Cancelar y Volver
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-body">
+                <h6>📞 Contacto para Reactivación</h6>
+                <p class="text-muted mb-0">
+                    Si necesitas reactivar tu cuenta posteriormente, contacta al administrador del sistema.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.querySelector('form').addEventListener('submit', function(e) {
+    const confirmInput = document.getElementById('confirm_username');
+    if (confirmInput.value !== '{{ current_user.username }}') {
+        e.preventDefault();
+        alert('El nombre de usuario no coincide. Por favor, escribe exactamente: {{ current_user.username }}');
+        confirmInput.focus();
+    } else {
+        if (!confirm('¿Estás seguro de que quieres desactivar tu cuenta?\n\nPodrás reactivarla contactando al administrador.')) {
+            e.preventDefault();
+        }
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card border-danger">
+            <div class="card-header bg-danger text-white">
+                <h4 class="card-title mb-0">Eliminar Mi Cuenta</h4>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-warning">
+                    <h5>⚠️ Advertencia</h5>
+                    <p>Esta acción no se puede deshacer. Al eliminar tu cuenta:</p>
+                    <ul>
+                        <li>Se borrarán todos tus datos personales</li>
+                        <li>Se eliminará tu historial de monitoreo</li>
+                        <li>Tu dispositivo <strong>{{ current_user.device_code }}</strong> quedará disponible para otro usuario</li>
+                        <li>Perderás acceso permanente al sistema</li>
+                    </ul>
+                </div>
+                
+                <form method="POST">
+                    <div class="mb-3">
+                        <label for="confirm_username" class="form-label">
+                            Para confirmar, escribe tu nombre de usuario:
+                        </label>
+                        <input type="text" class="form-control" id="confirm_username" 
+                               name="confirm_username" required>
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-danger" 
+                                onclick="return confirm('¿ESTÁS ABSOLUTAMENTE SEGURO? Esta acción es irreversible.')">
+                            🗑️ ELIMINAR DEFINITIVAMENTE MI CUENTA
+                        </button>
+                        <a href="{{ url_for('user.dashboard') }}" class="btn btn-secondary">
+                            Cancelar y Volver
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.querySelector('form').addEventListener('submit', function(e) {
+    const confirmInput = document.getElementById('confirm_username');
+    if (confirmInput.value !== '{{ current_user.username }}') {
+        e.preventDefault();
+        alert('El nombre de usuario no coincide. Por favor, escribe exactamente: {{ current_user.username }}');
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,641 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <h2>❤️ Monitoreo en Tiempo Real</h2>
+        <p class="text-muted">Datos en vivo del sensor cardíaco</p>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{{ url_for('user.dashboard') }}" class="btn btn-secondary">← Volver al Dashboard</a>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Tarjeta de BPM Actual -->
+    <div class="col-md-4">
+        <div class="card border-primary">
+            <div class="card-body text-center">
+                <h5>💓 Frecuencia Cardíaca Actual</h5>
+                <div id="current-bpm" class="display-4 text-primary">--</div>
+                <div id="bpm-status" class="mt-2">
+                    <span class="badge bg-secondary">Esperando datos...</span>
+                </div>
+                <small class="text-muted" id="last-update">Última actualización: --</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Límites Seguros -->
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5>📊 Límites Seguros</h5>
+                <div class="mb-2">
+                    <strong>Máximo seguro:</strong> 
+                    <span id="max-safe" class="text-danger">{{ current_user.max_safe_bpm or 120 }} BPM</span>
+                </div>
+                <div class="mb-2">
+                    <strong>Mínimo seguro:</strong> 
+                    <span id="min-safe" class="text-primary">{{ current_user.min_safe_bpm or 60 }} BPM</span>
+                </div>
+                {% if current_user.heart_condition %}
+                <div class="alert alert-warning mt-2">
+                    <small>
+                        <strong>🏥 Condición:</strong> {{ current_user.heart_condition }}<br>
+                        Límites personalizados para tu condición
+                    </small>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Control del Sistema -->
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5>⚙️ Control del Sistema</h5>
+                <div id="system-status" class="alert alert-info">
+                    <strong>Estado:</strong> Sistema listo
+                </div>
+                <div class="text-center">
+                    <button id="start-monitoring" class="btn btn-success btn-lg">
+                        🚀 Iniciar Monitoreo
+                    </button>
+                    <button id="stop-monitoring" class="btn btn-danger btn-lg" disabled>
+                        ⏹️ Detener
+                    </button>
+                </div>
+                <div class="mt-2 text-center">
+                    <small class="text-muted" id="connection-status">
+                        Dispositivo: {{ current_user.device_code }}
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Gráfica en Tiempo Real -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    📈 Historial de Frecuencia Cardíaca (Últimos 10 minutos)
+                </h5>
+                <span class="badge bg-info" id="chart-count">0 lecturas</span>
+            </div>
+            <div class="card-body">
+                <canvas id="heartRateChart" height="120"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Estadísticas Rápidas -->
+<div class="row mt-4">
+    <div class="col-md-3">
+        <div class="card bg-light">
+            <div class="card-body text-center">
+                <h4 id="total-readings">0</h4>
+                <p class="card-text">Total Lecturas</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-light">
+            <div class="card-body text-center">
+                <h4 id="alert-count">0</h4>
+                <p class="card-text">Alertas Hoy</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-light">
+            <div class="card-body text-center">
+                <h4 id="avg-bpm">--</h4>
+                <p class="card-text">BPM Promedio</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-light">
+            <div class="card-body text-center">
+                <h4 id="session-time">0m</h4>
+                <p class="card-text">Tiempo Activo</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- NUEVA SECCIÓN: CHATBOT CARDIABOT -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card border-success">
+            <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">🤖 CardioBot - Asistente de Salud Cardíaca</h5>
+                <span class="badge bg-light text-success">IA en Tiempo Real</span>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <!-- Columna del Chat -->
+                    <div class="col-md-8">
+                        <div id="chatbot-messages" class="chat-messages mb-3" 
+                             style="max-height: 300px; overflow-y: auto; border: 1px solid #e9ecef; border-radius: 0.375rem; padding: 15px; background-color: #f8f9fa;">
+                            <div class="alert alert-info">
+                                <strong>CardioBot:</strong> ¡Hola! 👋 Soy tu asistente de salud cardíaca. 
+                                Estoy aquí para analizar tu ritmo cardíaco en tiempo real, explicar alertas 
+                                y darte recomendaciones personalizadas. ¿En qué puedo ayudarte?
+                            </div>
+                        </div>
+                        
+                        <!-- Acciones Rápidas -->
+                        <div class="quick-actions mb-3">
+                            <small class="text-muted d-block mb-2">Preguntas frecuentes:</small>
+                            <div class="btn-group w-100" role="group">
+                                <button type="button" class="btn btn-outline-success btn-sm" onclick="quickQuestion('¿Cómo está mi ritmo cardíaco actual?')">
+                                    Mi ritmo actual
+                                </button>
+                                <button type="button" class="btn btn-outline-success btn-sm" onclick="quickQuestion('Recomendaciones para mi corazón')">
+                                    Consejos
+                                </button>
+                                <button type="button" class="btn btn-outline-success btn-sm" onclick="quickQuestion('Qué hacer si tengo una alerta')">
+                                    Sobre alertas
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Input del Chat -->
+                        <div class="chat-input">
+                            <div class="input-group">
+                                <input type="text" id="chatbot-input" class="form-control" 
+                                       placeholder="Pregunta sobre tu ritmo cardíaco, alertas o recomendaciones..." 
+                                       onkeypress="if(event.key === 'Enter') sendChatMessage()">
+                                <button class="btn btn-success" type="button" onclick="sendChatMessage()">
+                                    <i class="fas fa-paper-plane"></i> Enviar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Columna de Información -->
+                    <div class="col-md-4">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6>💡 Qué puedo hacer por ti:</h6>
+                                <ul class="small ps-3">
+                                    <li>Analizar tu BPM en tiempo real</li>
+                                    <li>Explicar alertas cardíacas</li>
+                                    <li>Dar recomendaciones personalizadas</li>
+                                    <li>Interpretar tendencias</li>
+                                    <li>Consejos de estilo de vida</li>
+                                </ul>
+                                
+                                <hr>
+                                
+                                <h6>📊 Tus datos actuales:</h6>
+                                <div class="small">
+                                    <strong>Dispositivo:</strong><br>
+                                    <code>{{ current_user.device_code }}</code>
+                                </div>
+                                
+                                <div class="mt-2 small">
+                                    <strong>Límites:</strong><br>
+                                    {{ current_user.min_safe_bpm or 60 }} - {{ current_user.max_safe_bpm or 120 }} BPM
+                                </div>
+                                
+                                {% if current_user.heart_condition %}
+                                <div class="mt-2 small">
+                                    <strong>Condición:</strong><br>
+                                    {{ current_user.heart_condition }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Historial de Alertas -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card border-warning">
+            <div class="card-header bg-warning d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">🚨 Historial de Alertas Recientes</h5>
+                <span class="badge bg-danger" id="alert-badge">0</span>
+            </div>
+            <div class="card-body">
+                <div id="alert-history" class="alert-history">
+                    <p class="text-muted text-center">No hay alertas recientes</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+let monitoringInterval;
+let chart;
+let alertHistory = [];
+let sessionStartTime = null;
+let totalAlerts = 0;
+
+// Función para obtener datos en tiempo real
+async function fetchRealTimeData() {
+    try {
+        const response = await fetch('/user/api/real-time-data');
+        if (!response.ok) {
+            throw new Error(`Error HTTP: ${response.status}`);
+        }
+        const data = await response.json();
+        updateMonitoring(data);
+    } catch (error) {
+        console.error('❌ Error fetching sensor data:', error);
+        updateSystemStatus('Error de conexión', 'danger');
+    }
+}
+
+function updateMonitoring(data) {
+    // Actualizar BPM actual
+    const currentBpmElement = document.getElementById('current-bpm');
+    if (data.current_bpm) {
+        currentBpmElement.textContent = data.current_bpm;
+        currentBpmElement.className = 'display-4 ' + 
+            (data.is_alert ? 'text-danger' : 'text-success');
+    } else {
+        currentBpmElement.textContent = '--';
+        currentBpmElement.className = 'display-4 text-secondary';
+    }
+
+    // Actualizar estado
+    const statusBadge = document.getElementById('bpm-status');
+    if (data.current_bpm) {
+        if (data.is_alert) {
+            statusBadge.innerHTML = '<span class="badge bg-danger">🚨 ALERTA</span>';
+            updateSystemStatus(data.message, 'danger');
+            
+            // Agregar a historial de alertas
+            addToAlertHistory({
+                bpm: data.current_bpm,
+                message: data.message,
+                timestamp: new Date().toLocaleTimeString(),
+                type: data.current_bpm > data.max_safe ? 'alta' : 'baja'
+            });
+            
+        } else {
+            statusBadge.innerHTML = '<span class="badge bg-success">✅ NORMAL</span>';
+            updateSystemStatus('Ritmo cardíaco dentro de límites seguros', 'success');
+        }
+    }
+
+    // Actualizar última actualización
+    if (data.timestamp) {
+        const updateTime = new Date(data.timestamp).toLocaleTimeString();
+        document.getElementById('last-update').textContent = `Última actualización: ${updateTime}`;
+    }
+
+    // Actualizar gráfica
+    if (data.chart_data && data.chart_data.labels.length > 0) {
+        updateChart(data.chart_data);
+        document.getElementById('chart-count').textContent = `${data.chart_data.labels.length} lecturas`;
+    }
+
+    // Actualizar estadísticas
+    if (data.total_readings) {
+        document.getElementById('total-readings').textContent = data.total_readings;
+    }
+    
+    // Actualizar tiempo de sesión
+    updateSessionTime();
+}
+
+function updateChart(chartData) {
+    const ctx = document.getElementById('heartRateChart').getContext('2d');
+    
+    if (chart) {
+        chart.destroy();
+    }
+    
+    // Límites seguros para las líneas de referencia
+    const maxSafe = {{ current_user.max_safe_bpm or 120 }};
+    const minSafe = {{ current_user.min_safe_bpm or 60 }};
+    
+    chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: chartData.labels,
+            datasets: [
+                {
+                    label: 'BPM',
+                    data: chartData.bpm,
+                    borderColor: '#007bff',
+                    backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                    borderWidth: 2,
+                    tension: 0.4,
+                    fill: true,
+                    pointBackgroundColor: function(context) {
+                        const value = context.dataset.data[context.dataIndex];
+                        return value > maxSafe || value < minSafe ? '#dc3545' : '#28a745';
+                    },
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2,
+                    pointRadius: 4
+                },
+                {
+                    label: 'Límite Superior',
+                    data: chartData.labels.map(() => maxSafe),
+                    borderColor: '#dc3545',
+                    borderDash: [5, 5],
+                    borderWidth: 1,
+                    fill: false,
+                    pointRadius: 0
+                },
+                {
+                    label: 'Límite Inferior',
+                    data: chartData.labels.map(() => minSafe),
+                    borderColor: '#ffc107',
+                    borderDash: [5, 5],
+                    borderWidth: 1,
+                    fill: false,
+                    pointRadius: 0
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    suggestedMin: 40,
+                    suggestedMax: 180,
+                    title: {
+                        display: true,
+                        text: 'Latidos por Minuto (BPM)'
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Tiempo'
+                    }
+                }
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) {
+                                label += ': ';
+                            }
+                            if (context.parsed.y !== null) {
+                                label += context.parsed.y + ' BPM';
+                                
+                                // Agregar información de alerta en tooltip
+                                const value = context.parsed.y;
+                                if (value > maxSafe) {
+                                    label += ' (ALTA)';
+                                } else if (value < minSafe) {
+                                    label += ' (BAJA)';
+                                }
+                            }
+                            return label;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function addToAlertHistory(alert) {
+    // Solo agregar si es una alerta real
+    if (alert.bpm < {{ current_user.min_safe_bpm or 60 }} || 
+        alert.bpm > {{ current_user.max_safe_bpm or 120 }}) {
+        
+        alertHistory.unshift(alert);
+        totalAlerts++;
+        
+        // Mantener solo últimas 10 alertas
+        if (alertHistory.length > 10) {
+            alertHistory = alertHistory.slice(0, 10);
+        }
+        
+        updateAlertHistory();
+        updateAlertBadge();
+    }
+}
+
+function updateAlertHistory() {
+    const container = document.getElementById('alert-history');
+    
+    if (alertHistory.length === 0) {
+        container.innerHTML = '<p class="text-muted text-center">No hay alertas críticas recientes</p>';
+        return;
+    }
+    
+    let html = '';
+    alertHistory.forEach(alert => {
+        const alertClass = alert.type === 'alta' ? 'warning' : 'danger';
+        const icon = alert.type === 'alta' ? '📈' : '📉';
+        const alertText = alert.type === 'alta' ? 'ALTA' : 'BAJA';
+        
+        html += `
+            <div class="alert alert-${alertClass} d-flex justify-content-between align-items-center">
+                <div>
+                    <strong>${icon} ${alert.bpm} BPM</strong> - ${alertText}<br>
+                    <small>${alert.message}</small>
+                </div>
+                <small class="text-muted">${alert.timestamp}</small>
+            </div>
+        `;
+    });
+    container.innerHTML = html;
+}
+
+function updateAlertBadge() {
+    document.getElementById('alert-badge').textContent = totalAlerts;
+    document.getElementById('alert-count').textContent = totalAlerts;
+}
+
+function updateSystemStatus(message, type) {
+    const statusElement = document.getElementById('system-status');
+    const types = {
+        'success': 'alert-success',
+        'danger': 'alert-danger',
+        'warning': 'alert-warning',
+        'info': 'alert-info'
+    };
+    
+    statusElement.className = `alert ${types[type] || 'alert-info'}`;
+    statusElement.innerHTML = `<strong>Estado:</strong> ${message}`;
+}
+
+function updateSessionTime() {
+    if (!sessionStartTime) return;
+    
+    const now = new Date();
+    const diffMs = now - sessionStartTime;
+    const diffMins = Math.floor(diffMs / 60000);
+    
+    document.getElementById('session-time').textContent = `${diffMins}m`;
+}
+
+function startMonitoring() {
+    document.getElementById('start-monitoring').disabled = true;
+    document.getElementById('stop-monitoring').disabled = false;
+    
+    sessionStartTime = new Date();
+    totalAlerts = 0;
+    alertHistory = [];
+    
+    updateSystemStatus('Monitoreo activo - Recibiendo datos del sensor...', 'success');
+    
+    // Obtener datos inmediatamente
+    fetchRealTimeData();
+    
+    // Luego cada 3 segundos
+    monitoringInterval = setInterval(fetchRealTimeData, 3000);
+}
+
+function stopMonitoring() {
+    document.getElementById('start-monitoring').disabled = false;
+    document.getElementById('stop-monitoring').disabled = true;
+    
+    clearInterval(monitoringInterval);
+    updateSystemStatus('Monitoreo detenido', 'info');
+    
+    // Resetear display
+    document.getElementById('current-bpm').textContent = '--';
+    document.getElementById('current-bpm').className = 'display-4 text-secondary';
+    document.getElementById('bpm-status').innerHTML = '<span class="badge bg-secondary">Monitoreo detenido</span>';
+    document.getElementById('last-update').textContent = 'Última actualización: --';
+}
+
+// ================== FUNCIONES DEL CHATBOT ==================
+class Chatbot {
+    constructor() {
+        this.messages = [];
+        this.isLoading = false;
+    }
+
+    async sendMessage(message) {
+        if (this.isLoading) return;
+        
+        this.isLoading = true;
+        this.addMessage('user', message);
+        this.showLoading();
+        
+        try {
+            const response = await fetch('/user/api/chatbot-analysis', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ message: message })
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok) {
+                this.addMessage('bot', data.response);
+            } else {
+                this.addMessage('bot', '❌ Error: ' + (data.error || 'No se pudo conectar con el asistente'));
+            }
+        } catch (error) {
+            this.addMessage('bot', '❌ Error de conexión. Intenta nuevamente.');
+        } finally {
+            this.hideLoading();
+            this.isLoading = false;
+        }
+    }
+
+    addMessage(sender, text) {
+        const messagesContainer = document.getElementById('chatbot-messages');
+        const messageClass = sender === 'user' ? 'alert-secondary' : 'alert-info';
+        const alignment = sender === 'user' ? 'text-end' : '';
+        
+        const messageHtml = `
+            <div class="alert ${messageClass} ${alignment}">
+                <strong>${sender === 'user' ? 'Tú' : 'CardioBot'}:</strong><br>
+                ${this.formatMessage(text)}
+            </div>
+        `;
+        
+        messagesContainer.innerHTML += messageHtml;
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    formatMessage(text) {
+        // Convertir saltos de línea y formato básico
+        return text.replace(/\n/g, '<br>')
+                  .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                  .replace(/\*(.*?)\*/g, '<em>$1</em>');
+    }
+
+    showLoading() {
+        const messagesContainer = document.getElementById('chatbot-messages');
+        messagesContainer.innerHTML += `
+            <div class="alert alert-warning">
+                <strong>CardioBot:</strong> <i class="fas fa-spinner fa-spin"></i> Analizando tu pregunta...
+            </div>
+        `;
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    hideLoading() {
+        const messagesContainer = document.getElementById('chatbot-messages');
+        const lastMessage = messagesContainer.lastElementChild;
+        if (lastMessage && lastMessage.querySelector('.fa-spinner')) {
+            lastMessage.remove();
+        }
+    }
+}
+
+// Instancia global del chatbot
+const chatbot = new Chatbot();
+
+// Funciones globales para HTML
+function sendChatMessage() {
+    const input = document.getElementById('chatbot-input');
+    const message = input.value.trim();
+    
+    if (message) {
+        chatbot.sendMessage(message);
+        input.value = '';
+    }
+}
+
+function handleChatKeypress(event) {
+    if (event.key === 'Enter') {
+        sendChatMessage();
+    }
+}
+
+function quickQuestion(question) {
+    document.getElementById('chatbot-input').value = question;
+    sendChatMessage();
+}
+
+// ================== FIN FUNCIONES CHATBOT ==================
+
+// Event Listeners
+document.getElementById('start-monitoring').addEventListener('click', startMonitoring);
+document.getElementById('stop-monitoring').addEventListener('click', stopMonitoring);
+
+// Inicializar gráfica vacía al cargar
+document.addEventListener('DOMContentLoaded', function() {
+    updateChart({ labels: [], bpm: [], alerts: [] });
+    updateSystemStatus('Sistema listo - Presiona "Iniciar Monitoreo"', 'info');
+});
+</script>
+{% endblock %}

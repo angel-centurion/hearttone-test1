@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Gestión de Dispositivos</h2>
+    <a href="{{ url_for('admin.admin_dashboard') }}" class="btn btn-secondary">← Volver</a>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="card-title mb-0">Dispositivos de Monitoreo (20 unidades)</h5>
+    </div>
+    <div class="card-body">
+        <!-- Vista compacta en tabla -->
+        <div class="table-responsive">
+            <table class="table table-sm table-striped">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Código</th>
+                        <th>Estado</th>
+                        <th>Fecha de Creación</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for device in devices %}
+                    <tr>
+                        <td>
+                            <code class="fs-6">{{ device.device_code }}</code>
+                        </td>
+                        <td>
+                            {% if device.is_used %}
+                                <span class="badge bg-danger">❌ En Uso</span>
+                            {% else %}
+                                <span class="badge bg-success">✅ Disponible</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <small class="text-muted">{{ device.created_at.strftime('%d/%m/%Y') }}</small>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Resumen compacto -->
+<div class="row mt-3">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body text-center py-2">
+                <h6 class="mb-0">{{ devices|length }}</h6>
+                <small>Total</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body text-center py-2">
+                <h6 class="mb-0">{{ devices|selectattr('is_used', 'equalto', false)|list|length }}</h6>
+                <small>Disponibles</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body text-center py-2">
+                <h6 class="mb-0">{{ devices|selectattr('is_used', 'equalto', true)|list|length }}</h6>
+                <small>En Uso</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body text-center py-2">
+                <h6 class="mb-0">{{ (devices|selectattr('is_used', 'equalto', true)|list|length / devices|length * 100)|round|int }}%</h6>
+                <small>Uso</small>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

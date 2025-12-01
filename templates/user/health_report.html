@@ -1,0 +1,396 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <h2>📊 Mi Reporte de Salud</h2>
+        <p class="text-muted">Análisis de tus lecturas cardíacas</p>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{{ url_for('user.dashboard') }}" class="btn btn-secondary">← Volver al Dashboard</a>
+    </div>
+</div>
+
+<!-- Resumen Estadístico -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body text-center">
+                <h5>{{ total_readings }}</h5>
+                <p>Total Lecturas</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body text-center">
+                <h5>{{ normal_readings }}</h5>
+                <p>Lecturas Normales</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body text-center">
+                <h5>{{ "%.1f"|format(avg_bpm) }}</h5>
+                <p>BPM Promedio</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card {% if alert_percentage > 30 %}bg-danger{% else %}bg-info{% endif %} text-white">
+            <div class="card-body text-center">
+                <h5>{{ "%.1f"|format(alert_percentage) }}%</h5>
+                <p>Alertas</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Chatbot de IA -->
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">🤖 Asistente de IA - Salud Cardíaca</h5>
+                <span class="badge bg-success">En Línea</span>
+            </div>
+            <div class="card-body d-flex flex-column">
+                <!-- Chat Messages -->
+                <div id="chat-messages" class="chat-messages flex-grow-1 mb-3">
+                    <div class="alert alert-info">
+                        <strong>🤖 Asistente:</strong> ¡Hola! Soy tu asistente de IA para salud cardíaca. Puedo analizar tus datos y darte recomendaciones personalizadas. ¿En qué puedo ayudarte?
+                    </div>
+                </div>
+                
+                <!-- Quick Actions -->
+                <div class="quick-actions mb-3">
+                    <div class="btn-group w-100" role="group">
+                        <button class="btn btn-outline-primary btn-sm" onclick="sendQuickQuestion('¿Cómo está mi salud cardíaca?')">
+                            📊 Mi Estado
+                        </button>
+                        <button class="btn btn-outline-warning btn-sm" onclick="sendQuickQuestion('Analiza mis alertas recientes')">
+                            🚨 Alertas
+                        </button>
+                        <button class="btn btn-outline-success btn-sm" onclick="sendQuickQuestion('Dame recomendaciones')">
+                            💡 Consejos
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Chat Input -->
+                <div class="chat-input">
+                    <div class="input-group">
+                        <input type="text" id="chat-input" class="form-control" placeholder="Escribe tu pregunta...">
+                        <button id="send-btn" class="btn btn-primary">
+                            <span id="send-text">Enviar</span>
+                            <span id="loading-spinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+                        </button>
+                    </div>
+                    <small class="text-muted">Ej: "Analiza mi ritmo cardíaco", "¿Cómo mejorar mi salud?"</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráfica y Datos -->
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">📈 Progreso Semanal</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="weeklyChart" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Controles de Filtrado -->
+<div class="row mb-4 mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">🔍 Opciones de Filtrado</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <label class="form-label"><strong>Tipo de Lectura:</strong></label>
+                        <div class="btn-group w-100" role="group">
+                            <a href="{{ url_for('user.health_report', filter='todas', dias=current_days) }}" 
+                               class="btn btn-outline-primary {% if current_filter == 'todas' %}active{% endif %}">
+                                Todas las Lecturas
+                            </a>
+                            <a href="{{ url_for('user.health_report', filter='alertas', dias=current_days) }}" 
+                               class="btn btn-outline-danger {% if current_filter == 'alertas' %}active{% endif %}">
+                                Solo Alertas
+                            </a>
+                            <a href="{{ url_for('user.health_report', filter='normales', dias=current_days) }}" 
+                               class="btn btn-outline-success {% if current_filter == 'normales' %}active{% endif %}">
+                                Solo Normales
+                            </a>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label"><strong>Período de Tiempo:</strong></label>
+                        <div class="btn-group w-100" role="group">
+                            <a href="{{ url_for('user.health_report', filter=current_filter, dias=7) }}" 
+                               class="btn btn-outline-secondary {% if current_days == 7 %}active{% endif %}">
+                                Últimos 7 Días
+                            </a>
+                            <a href="{{ url_for('user.health_report', filter=current_filter, dias=30) }}" 
+                               class="btn btn-outline-secondary {% if current_days == 30 %}active{% endif %}">
+                                Últimos 30 Días
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-2 text-center">
+                    <small class="text-muted">
+                        Mostrando lecturas {{ current_filter }} de los últimos {{ current_days }} días
+                        (Total: {{ total_readings }} lecturas)
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Mensaje de Salud -->
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">💬 Análisis Automático</h5>
+                <button class="btn btn-sm btn-outline-info" onclick="sendQuickQuestion('Genera un análisis completo')">
+                    🔄 Actualizar Análisis
+                </button>
+            </div>
+            <div class="card-body">
+                {% for message in health_message %}
+                <div class="alert alert-info">
+                    {{ message }}
+                </div>
+                {% endfor %}
+                
+                <h6>💡 Recomendaciones Automáticas:</h6>
+                <ul>
+                    {% for tip in health_tips %}
+                    <li>{{ tip }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Últimas Lecturas -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    📋 Historial Reciente
+                    <small class="text-muted">
+                        ({{ current_filter|title }} - Últimos {{ current_days }} días)
+                    </small>
+                </h5>
+                <span class="badge bg-{% if current_filter == 'alertas' %}danger{% elif current_filter == 'normales' %}success{% else %}primary{% endif %}">
+                    Filtro: {{ current_filter|title }}
+                </span>
+            </div>
+            <div class="card-body">
+                {% if recent_data %}
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>BPM</th>
+                                <th>Estado</th>
+                                <th>Fecha/Hora</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for data in recent_data %}
+                            <tr>
+                                <td>
+                                    <strong>{{ data.bpm }}</strong>
+                                    <br>
+                                    <small class="text-muted">
+                                        Límites: {{ current_user.min_safe_bpm or 60 }}-{{ current_user.max_safe_bpm or 120 }}
+                                    </small>
+                                </td>
+                                <td>
+                                    {% if data.is_alert %}
+                                        <span class="badge bg-danger">🚨 Alerta</span>
+                                        <br>
+                                        <small class="text-muted">
+                                            {% if data.bpm > (current_user.max_safe_bpm or 120) %}
+                                            Taquicardia
+                                            {% else %}
+                                            Bradicardia
+                                            {% endif %}
+                                        </small>
+                                    {% else %}
+                                        <span class="badge bg-success">✅ Normal</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ data.timestamp.strftime('%d/%m/%Y %H:%M') }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center">
+                    <p class="text-muted">No hay lecturas registradas con el filtro actual.</p>
+                    <a href="{{ url_for('user.monitoring') }}" class="btn btn-primary">
+                        🎯 Iniciar Monitoreo
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// Gráfica semanal
+fetch('/user/api/weekly-report')
+    .then(response => response.json())
+    .then(data => {
+        const ctx = document.getElementById('weeklyChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: data.map(d => d.date),
+                datasets: [{
+                    label: 'BPM Promedio',
+                    data: data.map(d => d.avg_bpm),
+                    borderColor: '#007bff',
+                    backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        suggestedMin: 40,
+                        suggestedMax: 120
+                    }
+                }
+            }
+        });
+    });
+
+// Chatbot functionality
+const chatMessages = document.getElementById('chat-messages');
+const chatInput = document.getElementById('chat-input');
+const sendBtn = document.getElementById('send-btn');
+const sendText = document.getElementById('send-text');
+const loadingSpinner = document.getElementById('loading-spinner');
+
+function addMessage(message, isUser = false) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `alert ${isUser ? 'alert-secondary' : 'alert-info'}`;
+    messageDiv.innerHTML = `<strong>${isUser ? '👤 Tú' : '🤖 Asistente'}:</strong> ${formatMessage(message)}`;
+    chatMessages.appendChild(messageDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function formatMessage(message) {
+    return message.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                  .replace(/\n/g, '<br>')
+                  .replace(/•/g, '•');
+}
+
+async function sendMessage() {
+    const message = chatInput.value.trim();
+    if (!message) return;
+
+    addMessage(message, true);
+    chatInput.value = '';
+    
+    sendText.classList.add('d-none');
+    loadingSpinner.classList.remove('d-none');
+    sendBtn.disabled = true;
+
+    try {
+        const response = await fetch('/user/api/chatbot-analysis', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ message: message })
+        });
+
+        const data = await response.json();
+        
+        if (data.error) {
+            addMessage(`❌ Error: ${data.error}`);
+        } else {
+            addMessage(data.response);
+        }
+    } catch (error) {
+        addMessage('❌ Error de conexión. Por favor, intenta nuevamente.');
+        console.error('Chatbot error:', error);
+    } finally {
+        sendText.classList.remove('d-none');
+        loadingSpinner.classList.add('d-none');
+        sendBtn.disabled = false;
+    }
+}
+
+function sendQuickQuestion(question) {
+    chatInput.value = question;
+    sendMessage();
+}
+
+sendBtn.addEventListener('click', sendMessage);
+chatInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        sendMessage();
+    }
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(() => {
+        if (chatMessages.children.length === 1) {
+            addMessage('💡 <strong>Prueba preguntarme:</strong><br>• "¿Cómo está mi salud cardíaca?"<br>• "Analiza mis alertas recientes"<br>• "Dame recomendaciones personalizadas"<br>• "¿Cómo evoluciona mi ritmo cardíaco?"');
+        }
+    }, 2000);
+});
+</script>
+
+<style>
+.chat-messages {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid #e9ecef;
+    border-radius: 0.375rem;
+    padding: 10px;
+    background-color: #f8f9fa;
+}
+
+.chat-messages .alert {
+    margin-bottom: 10px;
+    word-wrap: break-word;
+}
+
+.quick-actions .btn-group .btn {
+    font-size: 0.8rem;
+    padding: 0.25rem 0.5rem;
+}
+
+.chat-input {
+    margin-top: 10px;
+}
+</style>
+{% endblock %}

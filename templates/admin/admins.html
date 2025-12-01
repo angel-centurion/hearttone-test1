@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>👑 Gestión de Administradores</h2>
+    <a href="{{ url_for('admin.admin_dashboard') }}" class="btn btn-secondary">← Volver</a>
+</div>
+
+<div class="alert alert-info">
+    <strong>Información:</strong> Solo el administrador principal puede gestionar otros administradores.
+    Los administradores creados <strong>NO pueden crear nuevos administradores</strong>.
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="card-title mb-0">Lista de Administradores</h5>
+    </div>
+    <div class="card-body">
+        {% if admins %}
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Usuario</th>
+                            <th>Email</th>
+                            <th>Fecha de Creación</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for admin in admins %}
+                        <tr>
+                            <td>{{ admin.id }}</td>
+                            <td>
+                                {{ admin.username }}
+                                {% if admin.is_root_admin() %}
+                                <span class="badge bg-warning">Principal</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ admin.email }}</td>
+                            <td>{{ admin.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+                            <td>
+                                {% if not admin.is_root_admin() %}
+                                <form method="POST" action="{{ url_for('admin.admin_delete_admin', admin_id=admin.id) }}" 
+                                      onsubmit="return confirm('¿Estás seguro de eliminar este administrador? También se eliminarán todos los usuarios que creó.');">
+                                    <button type="submit" class="btn btn-danger btn-sm">🗑️ Eliminar</button>
+                                </form>
+                                {% else %}
+                                <span class="text-muted">No se puede eliminar</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="text-muted">No hay otros administradores registrados.</p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">Acciones Disponibles</h6>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('admin.admin_create_admin') }}" class="btn btn-success">
+                        ➕ Crear Nuevo Admin
+                    </a>
+                    <a href="{{ url_for('admin.admin_users') }}" class="btn btn-primary">
+                        👥 Gestionar Usuarios
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

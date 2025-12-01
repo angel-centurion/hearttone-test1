@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>👥 Usuarios Desactivados</h2>
+    <div>
+        <a href="{{ url_for('admin.admin_users') }}" class="btn btn-primary">← Usuarios Activos</a>
+        <a href="{{ url_for('admin.admin_dashboard') }}" class="btn btn-secondary">← Dashboard</a>
+    </div>
+</div>
+
+<div class="alert alert-warning">
+    <strong>💡 Información:</strong> Los usuarios desactivados conservan sus datos históricos pero no pueden acceder al sistema. 
+    Sus dispositivos están disponibles para nuevos usuarios.
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="card-title mb-0">Lista de Usuarios Desactivados</h5>
+    </div>
+    <div class="card-body">
+        {% if users %}
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Usuario</th>
+                            <th>Email</th>
+                            <th>Dispositivo</th>
+                            <th>Fecha Desactivación</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user in users %}
+                        <tr>
+                            <td>{{ user.id }}</td>
+                            <td>
+                                <s>{{ user.username }}</s>
+                                <br><small class="text-muted">Desactivado</small>
+                            </td>
+                            <td>{{ user.email }}</td>
+                            <td>
+                                {% if user.device_code %}
+                                    <span class="badge bg-secondary">{{ user.device_code }}</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Sin dispositivo</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if user.deleted_at %}
+                                    {{ user.deleted_at.strftime('%d/%m/%Y %H:%M') }}
+                                {% else %}
+                                    <span class="text-muted">No disponible</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group" role="group">
+                                    <form method="POST" action="{{ url_for('admin.admin_reactivate_user', user_id=user.id) }}" 
+                                          class="d-inline">
+                                        <button type="submit" class="btn btn-success btn-sm" 
+                                                onclick="return confirm('¿Reactivar este usuario?')">
+                                            🔄 Reactivar
+                                        </button>
+                                    </form>
+                                    
+                                    {% if current_user.is_root_admin() %}
+                                    <form method="POST" action="{{ url_for('admin.admin_delete_permanent', user_id=user.id) }}" 
+                                          class="d-inline">
+                                        <button type="submit" class="btn btn-danger btn-sm" 
+                                                onclick="return confirm('⚠️ ¿ELIMINAR PERMANENTEMENTE?\\n\\nEsta acción NO se puede deshacer.\\nSe borrarán todos los datos del usuario.')">
+                                            🗑️ Eliminar
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="text-muted text-center">No hay usuarios desactivados</p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">📊 Estadísticas</h6>
+            </div>
+            <div class="card-body">
+                <ul class="list-group">
+                    <li class="list-group-item d-flex justify-content-between">
+                        <span>Usuarios desactivados:</span>
+                        <strong>{{ users|length }}</strong>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between">
+                        <span>Dispositivos liberados:</span>
+                        <strong>{{ users|selectattr('device_code')|list|length }}</strong>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">💡 Información</h6>
+            </div>
+            <div class="card-body">
+                <small class="text-muted">
+                    <strong>Reactivar:</strong> El usuario recupera acceso y su dispositivo.<br>
+                    <strong>Eliminar:</strong> Borrado permanente (solo admin principal).<br>
+                    <strong>Datos:</strong> Los datos históricos se conservan al reactivar.
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

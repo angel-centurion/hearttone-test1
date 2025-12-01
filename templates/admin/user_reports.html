@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>📊 Reportes de Usuarios</h2>
+    <a href="{{ url_for('admin.admin_dashboard') }}" class="btn btn-secondary">← Volver</a>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="card-title mb-0">
+            {% if current_user.is_root_admin() %}
+            Reportes de Todos los Usuarios
+            {% else %}
+            Reportes de Mis Usuarios
+            {% endif %}
+        </h5>
+    </div>
+    <div class="card-body">
+        {% if user_reports %}
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Usuario</th>
+                            <th>Email</th>
+                            <th>Lecturas Totales</th>
+                            <th>Alertas</th>
+                            <th>BPM Promedio</th>
+                            <th>Estado</th>
+                            <th>Última Lectura</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for report in user_reports %}
+                        <tr>
+                            <td>
+                                <strong>{{ report.user.username }}</strong>
+                                {% if report.user.heart_condition %}
+                                <br><small class="text-muted">{{ report.user.heart_condition }}</small>
+                                {% endif %}
+                            </td>
+                            <td>{{ report.user.email }}</td>
+                            <td>{{ report.total_readings }}</td>
+                            <td>
+                                <span class="badge {% if report.alert_readings > 0 %}bg-danger{% else %}bg-success{% endif %}">
+                                    {{ report.alert_readings }}
+                                </span>
+                            </td>
+                            <td>
+                                <strong>{{ report.avg_bpm }}</strong>
+                                <br>
+                                <small class="text-muted">
+                                    Límites: {{ report.user.min_safe_bpm }}-{{ report.user.max_safe_bpm }}
+                                </small>
+                            </td>
+                            <td>
+                                <span class="badge bg-{{ report.status_class }}">
+                                    {{ report.status }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if report.last_reading %}
+                                {{ report.last_reading.strftime('%d/%m/%Y %H:%M') }}
+                                {% else %}
+                                <span class="text-muted">Sin datos</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{{ url_for('admin.admin_user_detailed_report', user_id=report.user.id) }}" 
+                                   class="btn btn-info btn-sm">📈 Detalles</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="text-muted">No hay usuarios con datos para mostrar.</p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">📋 Resumen General</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="card bg-primary text-white">
+                            <div class="card-body text-center">
+                                <h5>{{ user_reports|length }}</h5>
+                                <p>Total Usuarios</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-success text-white">
+                            <div class="card-body text-center">
+                                <h5>{{ user_reports|selectattr('status', 'equalto', 'Excelente')|list|length }}</h5>
+                                <p>Excelente Estado</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-warning text-white">
+                            <div class="card-body text-center">
+                                <h5>{{ user_reports|selectattr('status', 'equalto', 'Estable')|list|length }}</h5>
+                                <p>Estado Estable</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-danger text-white">
+                            <div class="card-body text-center">
+                                <h5>{{ user_reports|selectattr('status', 'equalto', 'Necesita atención')|list|length }}</h5>
+                                <p>Necesitan Atención</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

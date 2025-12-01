@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Panel de Administración</h2>
+    <div>
+        {% if stats.is_root_admin %}
+        <span class="badge bg-warning me-2">👑 Administrador Principal</span>
+        <a href="{{ url_for('admin.admin_create_admin') }}" class="btn btn-outline-primary">
+            ➕ Crear Nuevo Admin
+        </a>
+        {% else %}
+        <span class="badge bg-info me-2">👤 Administrador</span>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Estadísticas -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-white bg-primary">
+            <div class="card-body">
+                <h5 class="card-title">{{ stats.total_users }}</h5>
+                <p class="card-text">Usuarios Activos</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-success">
+            <div class="card-body">
+                <h5 class="card-title">{{ stats.available_devices }}</h5>
+                <p class="card-text">Dispositivos Disponibles</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-warning">
+            <div class="card-body">
+                <h5 class="card-title">{{ stats.used_devices }}</h5>
+                <p class="card-text">Dispositivos en Uso</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-danger">
+            <div class="card-body">
+                <h5 class="card-title">{{ stats.total_alerts }}</h5>
+                <p class="card-text">Alertas Totales</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Estadísticas Adicionales para Jerarquía -->
+<div class="row mb-4">
+    {% if stats.is_root_admin %}
+    <div class="col-md-3">
+        <div class="card text-white bg-warning">
+            <div class="card-body">
+                <h5 class="card-title">{{ stats.total_admins }}</h5>
+                <p class="card-text">Administradores</p>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="col-md-3">
+        <div class="card text-white bg-info">
+            <div class="card-body">
+                <h5 class="card-title">{{ stats.my_users }}</h5>
+                <p class="card-text">Mis Usuarios</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    <div class="col-md-3">
+        <div class="card text-white bg-secondary">
+            <div class="card-body">
+                <h5 class="card-title">{{ stats.inactive_users }}</h5>
+                <p class="card-text">Usuarios Desactivados</p>
+                <a href="{{ url_for('admin.admin_inactive_users') }}" class="btn btn-outline-light btn-sm">Gestionar</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Últimos Usuarios -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    {% if stats.is_root_admin %}
+                    Últimos Usuarios Registrados
+                    {% else %}
+                    Mis Últimos Usuarios
+                    {% endif %}
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if recent_users %}
+                    <div class="list-group">
+                        {% for user in recent_users %}
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <strong>{{ user.username }}</strong><br>
+                                    <small class="text-muted">{{ user.email }}</small>
+                                </div>
+                                <div>
+                                    <small class="text-muted">{{ user.created_at.strftime('%d/%m/%Y') }}</small>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-muted">No hay usuarios registrados</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Acciones Rápidas -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Acciones Rápidas</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('admin.admin_users') }}" class="btn btn-outline-primary">
+                        👥 Gestionar Usuarios Activos
+                    </a>
+                    <a href="{{ url_for('admin.admin_inactive_users') }}" class="btn btn-outline-warning">
+                        ⏸️ Usuarios Desactivados
+                    </a>
+                    <a href="{{ url_for('admin.admin_devices') }}" class="btn btn-outline-success">
+                        📱 Gestionar Dispositivos
+                    </a>
+                    <a href="{{ url_for('admin.admin_user_reports') }}" class="btn btn-outline-info">
+                        📈 Reportes de Usuarios
+                    </a>
+                    {% if stats.is_root_admin %}
+                    <a href="{{ url_for('admin.admin_admins') }}" class="btn btn-outline-warning">
+                        👑 Gestionar Admins
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

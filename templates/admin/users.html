@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Gestión de Usuarios Activos</h2>
+    <div>
+        <a href="{{ url_for('admin.admin_inactive_users') }}" class="btn btn-outline-warning me-2">
+            👥 Usuarios Desactivados
+        </a>
+        <a href="{{ url_for('admin.admin_dashboard') }}" class="btn btn-secondary">← Volver</a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="card-title mb-0">Lista de Usuarios Registrados Activos</h5>
+    </div>
+    <div class="card-body">
+        {% if users %}
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Usuario</th>
+                            <th>Email</th>
+                            <th>Dispositivo</th>
+                            <th>Condición</th>
+                            <th>Registro</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user in users %}
+                        <tr>
+                            <td>{{ user.id }}</td>
+                            <td>
+                                {{ user.username }}
+                                {% if not user.is_active %}
+                                <br><small class="text-danger">(Inactivo)</small>
+                                {% endif %}
+                            </td>
+                            <td>{{ user.email }}</td>
+                            <td>
+                                {% if user.device_code %}
+                                    <span class="badge bg-success">{{ user.device_code }}</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Sin dispositivo</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if user.heart_condition %}
+                                    <span class="badge bg-warning">{{ user.heart_condition }}</span>
+                                {% else %}
+                                    <span class="badge bg-info">Sin condición</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ user.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+                            <td>
+                                <form method="POST" action="{{ url_for('admin.admin_deactivate_user', user_id=user.id) }}" 
+                                      onsubmit="return confirm('¿Desactivar este usuario?\\n\\nEl usuario perderá acceso pero se conservarán sus datos.')">
+                                    <button type="submit" class="btn btn-warning btn-sm">⏸️ Desactivar</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="text-muted">No hay usuarios activos registrados</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

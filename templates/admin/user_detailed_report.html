@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>📈 Reporte Detallado: {{ user.username }}</h2>
+    <a href="{{ url_for('admin.admin_user_reports') }}" class="btn btn-secondary">← Volver a Reportes</a>
+</div>
+
+<!-- Información del Usuario -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">👤 Información del Usuario</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tr>
+                        <th>Usuario:</th>
+                        <td>{{ user.username }}</td>
+                    </tr>
+                    <tr>
+                        <th>Email:</th>
+                        <td>{{ user.email }}</td>
+                    </tr>
+                    <tr>
+                        <th>Dispositivo:</th>
+                        <td>{{ user.device_code }}</td>
+                    </tr>
+                    <tr>
+                        <th>Edad:</th>
+                        <td>{{ user.age or 'No registrada' }}</td>
+                    </tr>
+                    <tr>
+                        <th>Condición:</th>
+                        <td>{{ user.heart_condition or 'Sin condición específica' }}</td>
+                    </tr>
+                    <tr>
+                        <th>Límites Seguros:</th>
+                        <td>{{ user.min_safe_bpm }} - {{ user.max_safe_bpm }} BPM</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">📊 Estadísticas (Últimos 30 días)</h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-6">
+                        <h3>{{ total_readings }}</h3>
+                        <p class="text-muted">Lecturas Totales</p>
+                    </div>
+                    <div class="col-md-6">
+                        <h3 class="text-danger">{{ alert_readings }}</h3>
+                        <p class="text-muted">Alertas</p>
+                    </div>
+                </div>
+                <div class="row text-center mt-3">
+                    <div class="col-md-12">
+                        <h3>{{ "%.1f"|format(avg_bpm) }}</h3>
+                        <p class="text-muted">BPM Promedio</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Gráfica Semanal -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">📈 Evolución Semanal (Últimas 4 semanas)</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="weeklyChart" height="100"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Datos Semanales -->
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">📋 Datos por Semana</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Semana</th>
+                                <th>BPM Promedio</th>
+                                <th>Alertas</th>
+                                <th>Total Lecturas</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for week in weekly_data %}
+                            <tr>
+                                <td>{{ week.week }}</td>
+                                <td>
+                                    <strong>{{ week.avg_bpm }}</strong>
+                                    {% if week.avg_bpm > user.max_safe_bpm %}
+                                    <span class="badge bg-danger">Alto</span>
+                                    {% elif week.avg_bpm < user.min_safe_bpm %}
+                                    <span class="badge bg-warning">Bajo</span>
+                                    {% else %}
+                                    <span class="badge bg-success">Normal</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge {% if week.alerts > 0 %}bg-danger{% else %}bg-success{% endif %}">
+                                        {{ week.alerts }}
+                                    </span>
+                                </td>
+                                <td>{{ week.readings }}</td>
+                                <td>
+                                    {% if week.alerts == 0 %}
+                                    <span class="badge bg-success">Excelente</span>
+                                    {% elif week.alerts < 3 %}
+                                    <span class="badge bg-warning">Estable</span>
+                                    {% else %}
+                                    <span class="badge bg-danger">Atención</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// ✅ VARIABLES CORREGIDAS - Sin conflictos de sintaxis
+const weeklyDataJson = {{ weekly_data|tojson|safe }};
+const userMaxBpmValue = {{ user.max_safe_bpm }};
+const userMinBpmValue = {{ user.min_safe_bpm }};
+
+// Esperar a que el DOM esté listo
+document.addEventListener('DOMContentLoaded', function() {
+    const ctx = document.getElementById('weeklyChart').getContext('2d');
+    
+    // Crear el gráfico
+    const chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: weeklyDataJson.map(function(w) { return w.week; }),
+            datasets: [
+                {
+                    label: 'BPM Promedio',
+                    data: weeklyDataJson.map(function(w) { return w.avg_bpm; }),
+                    borderColor: '#007bff',
+                    backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                },
+                {
+                    label: 'Límite Superior (' + userMaxBpmValue + ' BPM)',
+                    data: weeklyDataJson.map(function() { return userMaxBpmValue; }),
+                    borderColor: '#dc3545',
+                    borderDash: [5, 5],
+                    borderWidth: 1,
+                    fill: false,
+                    pointRadius: 0
+                },
+                {
+                    label: 'Límite Inferior (' + userMinBpmValue + ' BPM)',
+                    data: weeklyDataJson.map(function() { return userMinBpmValue; }),
+                    borderColor: '#ffc107',
+                    borderDash: [5, 5],
+                    borderWidth: 1,
+                    fill: false,
+                    pointRadius: 0
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            interaction: {
+                intersect: false,
+                mode: 'index'
+            },
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    min: Math.max(30, userMinBpmValue - 20),
+                    max: userMaxBpmValue + 20,
+                    title: {
+                        display: true,
+                        text: 'Latidos por Minuto (BPM)'
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Semanas'
+                    }
+                }
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) {
+                                label += ': ';
+                            }
+                            if (context.parsed.y !== null) {
+                                label += context.parsed.y + ' BPM';
+                            }
+                            return label;
+                        }
+                    }
+                }
+            }
+        }
+    });
+});
+</script>
+{% endblock %}
