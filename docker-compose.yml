@@ -15,11 +15,13 @@ services:
     restart: unless-stopped
     networks:
       - app-network
+    # ✅ HEALTHCHECK CORREGIDO - va aquí dentro del servicio admin
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/"]
+      test: ["CMD", "curl", "-f", "http://localhost:5000/admin/login"]  # ✅ Ruta específica
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 40s  # ✅ Tiempo extra para que Flask inicie
 
   user:
     build: .
@@ -35,11 +37,13 @@ services:
     restart: unless-stopped
     networks:
       - app-network
+    # ✅ HEALTHCHECK para el servicio user
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/"]
+      test: ["CMD", "curl", "-f", "http://localhost:5000/"]  # ✅ Ruta raíz para user
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 40s
 
   nginx:
     image: nginx:alpine
@@ -49,9 +53,9 @@ services:
       - ./nginx-aws.conf:/etc/nginx/nginx.conf
     depends_on:
       admin:
-        condition: service_healthy
+        condition: service_healthy  # ✅ Espera a que admin esté healthy
       user:
-        condition: service_healthy
+        condition: service_healthy  # ✅ Espera a que user esté healthy
     container_name: icc-nginx
     restart: unless-stopped
     networks:

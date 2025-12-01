@@ -26,10 +26,11 @@ RUN useradd -m -u 1000 appuser && \
     chown -R appuser:appuser /app
 USER appuser
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:5000/ || exit 1
+# ❌ QUITA el HEALTHCHECK del Dockerfile (se maneja en docker-compose)
+# HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+#    CMD curl -f http://localhost:5000/ || exit 1
 
 EXPOSE 5000
 
-CMD ["python", "admin/app_admin.py"]
+# ❌ QUITA el CMD específico (ya se define en docker-compose)
+# CMD ["python", "admin/app_admin.py"]
