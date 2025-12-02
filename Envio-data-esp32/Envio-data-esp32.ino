@@ -6,64 +6,193 @@
 // 🔧 CAMBIA ESTOS VALORES
 const char* ssid = "A26 de Angel";           // Nombre de tu WiFi
 const char* password = "13082005";   // Contraseña de tu WiFi
-const char* serverUrl = "http://hearttone.duckdns.org/admin/api/sensor-data";  // IP de tu servidor Flask
-const char* deviceCode = "HR-SENSOR-A1B2-C3D4";  // Código del dispositivo
+const char* serverUrl = "http://hearttone.duckdns.org/admin/api/sensor-data";
+const char* deviceCode = "HR-SENSOR-A1B2-C3D4";
 
-// ==================== CONFIGURACIÓN DE SIMULACIÓN ====================
-int baseBPM = 75;              // BPM base (en reposo)
-int bpmVariation = 15;         // Variación normal (+/- BPM)
+// ==================== CONFIGURACIÓN UART ====================
+// Pines UART para recibir datos del sensor
+#define RXD2 16  // GPIO16 - Conectar al TX del sensor
+#define TXD2 17  // GPIO17 - Conectar al RX del sensor (opcional)
+
+// ==================== VARIABLES GLOBALES ====================
 unsigned long sendInterval = 3000;  // Enviar cada 3 segundos
-
-// Variables de simulación
-int currentBPM = baseBPM;
 unsigned long lastSendTime = 0;
-int simulationMode = 0;  // 0=Normal, 1=Ejercicio, 2=Alerta Alta, 3=Alerta Baja
+unsigned long lastBPMReceived = 0;
+const unsigned long BPM_TIMEOUT = 10000;  // Timeout de 10 segundos sin datos
+
+int currentBPM = 0;
+bool bpmDataValid = false;
+String uartBuffer = "";
 
 // ==================== SETUP ====================
 void setup() {
+  // Serial para debug (USB)
   Serial.begin(115200);
   delay(1000);
   
+  // UART2 para recibir datos del sensor BPM
+  Serial2.begin(9600, SERIAL_8N1, RXD2, TXD2);
+  
   Serial.println("\n\n");
   Serial.println("========================================");
-  Serial.println("   ESP32 - SIMULADOR BPM REALISTA");
+  Serial.println("   ESP32 - RECEPTOR BPM POR UART");
+  Serial.println("========================================\n");
+  
+  Serial.println("📡 Configuración UART:");
+  Serial.printf("   RX Pin: GPIO%d\n", RXD2);
+  Serial.printf("   TX Pin: GPIO%d\n", TXD2);
+  Serial.println("   Baudrate: 9600");
+  Serial.println("   Formato esperado: 'BPM:75' o '75'");
   Serial.println("========================================\n");
   
   // Conectar a WiFi
   connectWiFi();
   
-  Serial.println("\n📋 INSTRUCCIONES:");
-  Serial.println("   Envía por Serial:");
-  Serial.println("   '1' = Modo Normal (60-90 BPM)");
-  Serial.println("   '2' = Modo Ejercicio (100-140 BPM)");
-  Serial.println("   '3' = Alerta Alta (130-160 BPM)");
-  Serial.println("   '4' = Alerta Baja (40-50 BPM)");
-  Serial.println("   '5' = BPM Aleatorio Extremo");
-  Serial.println("========================================\n");
+  Serial.println("\n✅ Sistema listo - Esperando datos BPM...\n");
 }
 
 // ==================== LOOP PRINCIPAL ====================
 void loop() {
-  // Verificar comandos del Serial
-  checkSerialCommands();
+  // 🔍 DEBUG: Mostrar estado cada 5 segundos
+  static unsigned long lastDebug = 0;
+  if (millis() - lastDebug > 5000) {
+    lastDebug = millis();
+    Serial.print("🔍 UART disponible: ");
+    Serial.print(Serial2.available());
+    Serial.print(" bytes | BPM válido: ");
+    Serial.println(bpmDataValid ? "SI" : "NO");
+  }
+  
+  // Leer datos del UART
+  readBPMFromUART();
+  
+  // Verificar timeout de datos
+  checkBPMTimeout();
   
   // Enviar datos cada intervalo
   if (millis() - lastSendTime >= sendInterval) {
     lastSendTime = millis();
     
-    // Generar BPM según el modo
-    currentBPM = generateRealisticBPM();
-    
-    // Mostrar en Serial
-    displayBPMInfo();
-    
-    // Enviar al servidor
-    if (WiFi.status() == WL_CONNECTED) {
-      sendBPMData(currentBPM);
+    if (bpmDataValid) {
+      // Mostrar en Serial
+      displayBPMInfo();
+      
+      // Enviar al servidor
+      if (WiFi.status() == WL_CONNECTED) {
+        sendBPMData(currentBPM);
+      } else {
+        Serial.println("❌ WiFi desconectado - Reconectando...");
+        connectWiFi();
+      }
     } else {
-      Serial.println("❌ WiFi desconectado - Reconectando...");
-      connectWiFi();
+      Serial.println("⚠️  No hay datos BPM válidos del sensor");
     }
+  }
+}
+
+// ==================== LEER BPM DESDE UART ====================
+void readBPMFromUART() {
+  while (Serial2.available() > 0) {
+    char inChar = (char)Serial2.read();
+    
+    // 🔍 DEBUG: Mostrar cada carácter recibido
+    Serial.print("📥 Byte recibido: ");
+    Serial.print((int)inChar);
+    Serial.print(" (");
+    if (inChar >= 32 && inChar <= 126) {
+      Serial.print(inChar);
+    } else if (inChar == '\n') {
+      Serial.print("\\n");
+    } else if (inChar == '\r') {
+      Serial.print("\\r");
+    } else {
+      Serial.print("?");
+    }
+    Serial.println(")");
+    
+    // Acumular caracteres hasta encontrar nueva línea
+    if (inChar == '\n' || inChar == '\r') {
+      if (uartBuffer.length() > 0) {
+        Serial.print("🔍 Procesando buffer: [");
+        Serial.print(uartBuffer);
+        Serial.println("]");
+        parseBPMData(uartBuffer);
+        uartBuffer = "";
+      }
+    } else {
+      uartBuffer += inChar;
+      
+      // Evitar buffer overflow
+      if (uartBuffer.length() > 50) {
+        Serial.println("⚠️  Buffer overflow, limpiando...");
+        uartBuffer = "";
+      }
+    }
+  }
+}
+
+// ==================== PARSEAR DATOS BPM ====================
+void parseBPMData(String data) {
+  data.trim();  // Eliminar espacios en blanco
+  
+  int bpm = 0;
+  bool validData = false;
+  
+  // Formato 1: "BPM:75" o "bpm:75"
+  if (data.startsWith("BPM:") || data.startsWith("bpm:")) {
+    String bpmStr = data.substring(4);
+    bpm = bpmStr.toInt();
+    validData = true;
+  }
+  // Formato 2: "HEARTRATE:75" o "HR:75"
+  else if (data.startsWith("HEARTRATE:") || data.startsWith("heartrate:")) {
+    String bpmStr = data.substring(10);
+    bpm = bpmStr.toInt();
+    validData = true;
+  }
+  else if (data.startsWith("HR:") || data.startsWith("hr:")) {
+    String bpmStr = data.substring(3);
+    bpm = bpmStr.toInt();
+    validData = true;
+  }
+  // Formato 3: Solo número "75"
+  else if (data.length() > 0 && isDigit(data.charAt(0))) {
+    bpm = data.toInt();
+    validData = true;
+  }
+  // Formato 4: JSON simple {"bpm":75}
+  else if (data.startsWith("{")) {
+    StaticJsonDocument<128> doc;
+    DeserializationError error = deserializeJson(doc, data);
+    if (!error && doc.containsKey("bpm")) {
+      bpm = doc["bpm"];
+      validData = true;
+    }
+  }
+  
+  // Validar rango de BPM (30-220)
+  if (validData && bpm >= 30 && bpm <= 220) {
+    currentBPM = bpm;
+    bpmDataValid = true;
+    lastBPMReceived = millis();
+    
+    Serial.print("📩 BPM recibido: ");
+    Serial.print(currentBPM);
+    Serial.println(" ✓");
+  } else if (validData) {
+    Serial.print("⚠️  BPM fuera de rango: ");
+    Serial.println(bpm);
+  } else {
+    Serial.print("❌ Formato inválido: ");
+    Serial.println(data);
+  }
+}
+
+// ==================== VERIFICAR TIMEOUT ====================
+void checkBPMTimeout() {
+  if (bpmDataValid && (millis() - lastBPMReceived > BPM_TIMEOUT)) {
+    bpmDataValid = false;
+    Serial.println("⚠️  TIMEOUT: No se reciben datos del sensor");
   }
 }
 
@@ -89,61 +218,6 @@ void connectWiFi() {
   }
 }
 
-// ==================== GENERAR BPM REALISTA ====================
-int generateRealisticBPM() {
-  int bpm;
-  
-  switch(simulationMode) {
-    case 0:  // MODO NORMAL (60-90 BPM)
-      bpm = random(60, 91);
-      // Pequeñas variaciones graduales
-      if (random(0, 100) < 30) {
-        bpm = currentBPM + random(-3, 4);
-        bpm = constrain(bpm, 60, 90);
-      }
-      break;
-      
-    case 1:  // MODO EJERCICIO (100-140 BPM)
-      bpm = random(100, 141);
-      // Simular picos de ejercicio
-      if (random(0, 100) < 20) {
-        bpm = random(120, 145);
-      }
-      break;
-      
-    case 2:  // ALERTA ALTA - Taquicardia (130-160 BPM)
-      bpm = random(130, 161);
-      // Ocasionalmente picos más altos
-      if (random(0, 100) < 15) {
-        bpm = random(150, 170);
-      }
-      break;
-      
-    case 3:  // ALERTA BAJA - Bradicardia (40-50 BPM)
-      bpm = random(40, 51);
-      // Ocasionalmente caídas más bajas
-      if (random(0, 100) < 15) {
-        bpm = random(35, 45);
-      }
-      break;
-      
-    case 4: {  // ALEATORIO EXTREMO - ✅ Agregamos llaves para crear scope
-      int mode = random(0, 4);
-      if (mode == 0) bpm = random(30, 50);   // Muy bajo
-      else if (mode == 1) bpm = random(60, 90);   // Normal
-      else if (mode == 2) bpm = random(100, 130); // Elevado
-      else bpm = random(140, 180);  // Muy alto
-      break;
-    }
-      
-    default:
-      bpm = random(60, 91);
-  }
-  
-  // Asegurar que está en rango válido (30-220)
-  return constrain(bpm, 30, 220);
-}
-
 // ==================== MOSTRAR INFO EN SERIAL ====================
 void displayBPMInfo() {
   Serial.println("\n─────────────────────────────────────");
@@ -151,16 +225,7 @@ void displayBPMInfo() {
   Serial.print(millis() / 1000);
   Serial.println(" seg");
   
-  Serial.print("🔄 Modo: ");
-  switch(simulationMode) {
-    case 0: Serial.println("NORMAL"); break;
-    case 1: Serial.println("EJERCICIO"); break;
-    case 2: Serial.println("ALERTA ALTA ⚠️"); break;
-    case 3: Serial.println("ALERTA BAJA ⚠️"); break;
-    case 4: Serial.println("ALEATORIO"); break;
-  }
-  
-  Serial.print("💓 BPM Generado: ");
+  Serial.print("💓 BPM Actual: ");
   Serial.print(currentBPM);
   
   // Indicador visual
@@ -171,6 +236,10 @@ void displayBPMInfo() {
   } else {
     Serial.println(" 🟢 (Normal)");
   }
+  
+  Serial.print("📡 Última recepción: ");
+  Serial.print((millis() - lastBPMReceived) / 1000);
+  Serial.println(" seg atrás");
 }
 
 // ==================== ENVIAR DATOS AL SERVIDOR ====================
@@ -243,37 +312,4 @@ void sendBPMData(int bpm) {
   }
   
   http.end();
-}
-
-// ==================== COMANDOS POR SERIAL ====================
-void checkSerialCommands() {
-  if (Serial.available() > 0) {
-    char command = Serial.read();
-    
-    switch(command) {
-      case '1':
-        simulationMode = 0;
-        Serial.println("\n🟢 Modo NORMAL activado (60-90 BPM)");
-        break;
-      case '2':
-        simulationMode = 1;
-        Serial.println("\n🏃 Modo EJERCICIO activado (100-140 BPM)");
-        break;
-      case '3':
-        simulationMode = 2;
-        Serial.println("\n🔴 Modo ALERTA ALTA activado (130-160 BPM)");
-        break;
-      case '4':
-        simulationMode = 3;
-        Serial.println("\n🔵 Modo ALERTA BAJA activado (40-50 BPM)");
-        break;
-      case '5':
-        simulationMode = 4;
-        Serial.println("\n🎲 Modo ALEATORIO activado");
-        break;
-      default:
-        // Ignorar otros caracteres
-        break;
-    }
-  }
 }
